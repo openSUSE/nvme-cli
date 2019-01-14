@@ -1,0 +1,8 @@
+#
+# nvme_fc: udev event to automatically scan (via discovery controller)
+#   new FC nvme remote ports and auto-connect to the subsystems they report.
+#
+
+ACTION=="change", SUBSYSTEM=="fc", ENV{FC_EVENT}=="nvmediscovery", \
+  ENV{NVMEFC_HOST_TRADDR}=="*",  ENV{NVMEFC_TRADDR}=="*", \
+  RUN+="/usr/bin/systemctl --no-block start nvmefc-connect@--host-traddr=$env{NVMEFC_HOST_TRADDR}\\x20--traddr=$env{NVMEFC_TRADDR}.service"

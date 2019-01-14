@@ -1,0 +1,13 @@
+#
+# Unit file used by 70-nvmefc-autoconnect.rules.
+#
+
+[Unit]
+Description=Auto-connect to subsystems on FC-NVME devices
+After=syslog.target
+PartOf=nvmefc-connect.target
+Requires=nvmefc-connect.target
+
+[Service]
+Type=simple
+ExecStart=/bin/sh -c "/usr/sbin/nvme connect-all --transport=fc `/usr/bin/echo -e '%i'`"
