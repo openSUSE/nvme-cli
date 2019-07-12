@@ -1256,6 +1256,7 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area)
 	__s32 log_size = 0;
 	__s32 total_size = 0;
 	int i;
+	int j;
 
 	log_hdr = (struct wdc_dui_log_hdr *) malloc(dui_log_hdr_size);
 	if (log_hdr == NULL) {
@@ -1281,10 +1282,10 @@ static int wdc_do_cap_dui(int fd, char *file, __u32 xfer_size, int data_area)
 
 		/* parse log header for all sections up to specified data area inclusively */
 		if (data_area != WDC_NVME_DUI_MAX_DATA_AREA) {
-			for(int i = 0; i < WDC_NVME_DUI_MAX_SECTION; i++) {
-				if (log_hdr->log_section[i].data_area_id <= data_area &&
-				    log_hdr->log_section[i].data_area_id != 0)
-					log_size += log_hdr->log_section[i].section_size;
+			for(j = 0; j < WDC_NVME_DUI_MAX_SECTION; j++) {
+				if (log_hdr->log_section[j].data_area_id <= data_area &&
+				    log_hdr->log_section[j].data_area_id != 0)
+					log_size += log_hdr->log_section[j].section_size;
 				else
 					break;
 			}
