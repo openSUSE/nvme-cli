@@ -8,12 +8,14 @@
 #include <unistd.h>
 #include <errno.h>
 
+static char *_fmt0 = "/sys/class/nvme/nvme%d/transport";
 static char *_fmt1 = "/sys/class/nvme/nvme%d/device/subsystem_vendor";
 static char *_fmt2 = "/sys/class/nvme/nvme%d/device/subsystem_device";
 static char *_fmt3 = "/sys/class/nvme/nvme%d/device/vendor";
 static char *_fmt4 = "/sys/class/nvme/nvme%d/device/device";
 static char *_fmt5 = "/sys/class/nvme/nvme%d/device/class";
 
+static char fmt0[78];
 static char fmt1[78];
 static char fmt2[78];
 static char fmt3[78];
@@ -286,12 +288,23 @@ char *nvme_product_name(int id)
 	char sub_device[7] = { 0 };
 	char sub_vendor[7] = { 0 };
 	char class[13] = { 0 };
+	char transport[16] = { 0 };
 	size_t size = 1024;
 	char ret;
 	FILE *file = open_pci_ids();
 
 	if (!file)
 		goto error1;
+
+	snprintf(fmt0, 78, _fmt0, id);
+	ret = read_sys_node(fmt0, transport, 16);
+	if (ret)
+		goto error0;
+
+	if (strcmp(transport, "pcie")) {
+		fclose(file);
+		return NULL;
+	}
 
 	snprintf(fmt1, 78, _fmt1, id);
 	snprintf(fmt2, 78, _fmt2, id);

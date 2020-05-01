@@ -2134,10 +2134,10 @@ void json_print_list_items(struct list_item *list_items, unsigned len)
 					     formatter);
 
 		product = nvme_product_name(index);
-
-		json_object_add_value_string(device_attrs,
-					     "ProductName",
-					     product);
+		if (product)
+			json_object_add_value_string(device_attrs,
+						     "ProductName",
+						     product);
 
 		format(formatter, sizeof(formatter),
 		       list_items[i].ctrl.sn,
@@ -2170,6 +2170,8 @@ void json_print_list_items(struct list_item *list_items, unsigned len)
 	if (i)
 		json_object_add_value_array(root, "Devices", devices);
 	json_print_object(root, NULL);
+	printf("\n");
+	json_free_object(root);
 }
 
 void json_nvme_id_ns(struct nvme_id_ns *ns, unsigned int mode)
