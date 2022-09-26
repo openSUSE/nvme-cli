@@ -73,6 +73,11 @@ enum nvme_print_flags {
 	BINARY	= 1 << 3,	/* binary dump raw bytes */
 };
 
+enum nvme_cli_topo_ranking {
+	NVME_CLI_TOPO_NAMESPACE,
+	NVME_CLI_TOPO_CTRL,
+};
+
 #define SYS_NVME "/sys/class/nvme"
 
 void register_extension(struct plugin *plugin);
