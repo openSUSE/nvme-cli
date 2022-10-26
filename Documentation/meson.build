@@ -97,6 +97,7 @@ adoc_sources = [
   'nvme-set-property',
   'nvme-show-hostnqn',
   'nvme-show-regs',
+  'nvme-show-topology',
   'nvme-smart-log',
   'nvme-subsystem-reset',
   'nvme-supported-log-pages',
