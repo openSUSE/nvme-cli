@@ -11,6 +11,14 @@ PartOf=nvmf-connect.target
 Requires=nvmf-connect.target
 
 [Service]
+# https://en.opensuse.org/openSUSE:Security_Features#Systemd_hardening_effort
+ProtectSystem=full
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
 Type=simple
 Environment="CONNECT_ARGS=%i"
 ExecStart=/bin/sh -c "@SBINDIR@/nvme connect-all --context=autoconnect --quiet `/bin/echo -e '${CONNECT_ARGS}'`"
