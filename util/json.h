@@ -2,6 +2,7 @@
 #ifndef __JSON__H
 #define __JSON__H
 
+#ifdef CONFIG_JSONC
 #include <json.h>
 #include "util/types.h"
 
@@ -12,7 +13,7 @@
 #define json_free_object(o) json_object_put(o)
 #define json_free_array(a) json_object_put(a)
 #define json_object_add_value_uint(o, k, v) \
-	json_object_object_add(o, k, json_object_new_int(v))
+	json_object_object_add(o, k, json_object_new_uint64(v))
 #define json_object_add_value_int(o, k, v) \
 	json_object_object_add(o, k, json_object_new_int(v))
 #ifndef CONFIG_JSONC_14
@@ -48,4 +49,11 @@ struct json_object *util_json_object_new_uint128(nvme_uint128_t val);
 struct json_object *util_json_object_new_uint128(nvme_uint128_t val);
 
 uint64_t util_json_object_get_uint64(struct json_object *obj);
+
+#else /* !CONFIG_JSONC */
+
+struct json_object;
+
+#endif
+
 #endif

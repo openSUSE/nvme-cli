@@ -226,17 +226,17 @@ static void show_memblaze_smart_log_old(struct nvme_memblaze_smart_log *smart,
     printf("Total thermal throttling minutes since power on			: %u\n",
         smart->items[THERMAL_THROTTLE].thermal_throttle.count);
 
-    printf("Maximum temperature in Kelvin since last factory reset		: %u\n",
+    printf("Maximum temperature in kelvins since last factory reset		: %u\n",
         le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.max));
-    printf("Minimum temperature in Kelvin since last factory reset		: %u\n",
+    printf("Minimum temperature in kelvins since last factory reset		: %u\n",
         le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.min));
     if (compare_fw_version(fw_ver, "0.09.0300") != 0) {
-        printf("Maximum temperature in Kelvin since power on			: %u\n",
+        printf("Maximum temperature in kelvins since power on			: %u\n",
             le16_to_cpu(smart->items[TEMPT_SINCE_BOOTUP].temperature_p.max));
-        printf("Minimum temperature in Kelvin since power on			: %u\n",
+        printf("Minimum temperature in kelvins since power on			: %u\n",
             le16_to_cpu(smart->items[TEMPT_SINCE_BOOTUP].temperature_p.min));
     }
-    printf("Current temperature in Kelvin					: %u\n",
+    printf("Current temperature in kelvins					: %u\n",
         le16_to_cpu(smart->items[TEMPT_SINCE_RESET].temperature.curr));
 
     printf("Maximum power in watt since power on				: %u\n",
@@ -707,7 +707,7 @@ static int glp_high_latency(FILE *fdi, char *buf, int buflen, int print)
         }
         else  //  sort
         {
-            timestamp = logEntry->timestampH - 1;
+            timestamp = logEntry->timestampH;
             timestamp = timestamp << 32;
             timestamp += logEntry->timestampL;
             tt = timestamp / 1000;
@@ -1140,7 +1140,7 @@ static int mb_set_lat_stats(int argc, char **argv,
 		.disable = false,
 	};
 
-	const struct argconfig_commandline_options command_line_options[] = {
+	struct argconfig_commandline_options command_line_options[] = {
 		{"enable", 'e', "", CFG_FLAG, &cfg.enable, no_argument, enable_desc},
 		{"disable", 'd', "", CFG_FLAG, &cfg.disable, no_argument, disable_desc},
 		{NULL}

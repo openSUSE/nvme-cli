@@ -4,12 +4,13 @@ project(
     'nvme-cli', ['c'],
     meson_version: '>= 0.50.0',
     license: 'GPL-2.0-only',
-    version: '2.3',
+    version: '2.4',
     default_options: [
       'c_std=gnu99',
       'buildtype=debug',
       'prefix=/usr/local',
       'warning_level=1',
+      'sysconfdir=etc',
     ]
 )
 
@@ -44,24 +45,25 @@ endif
 conf.set('SYSCONFDIR', '"@0@"'.format(sysconfdir))
 
 # Check for libnvme availability
-libnvme_dep = dependency('libnvme', version: '>=1.3', required: true,
+libnvme_dep = dependency('libnvme', version: '>=1.4', required: true,
                          fallback : ['libnvme', 'libnvme_dep'])
 libnvme_mi_dep = dependency('libnvme-mi', required: true,
                          fallback : ['libnvme', 'libnvme_mi_dep'])
 
 # Check for libjson-c availability
-json_c_dep = dependency('json-c', required: true, version: '>=0.13',
-                        fallback : ['json-c', 'json_c_dep'])
-if json_c_dep.version().version_compare('>=0.14')
-  conf.set('CONFIG_JSONC_14', true, description: 'Is json-c at least 0.14?')
-  requires = 'Requires: json-c >= 0.14'
+if get_option('json-c').disabled()
+    json_c_dep = dependency('', required: false)
 else
-  requires = 'Requires: json-c >= 0.13'
+    json_c_dep = dependency('json-c', required: true, version: '>=0.13',
+                            fallback : ['json-c', 'json_c_dep'])
+    if json_c_dep.version().version_compare('>=0.14')
+        conf.set('CONFIG_JSONC_14', true, description: 'Is json-c at least 0.14?')
+        requires = 'Requires: json-c >= 0.14'
+    else
+        requires = 'Requires: json-c >= 0.13'
+    endif
 endif
-
-# Check for zlib availability
-libz_dep = dependency('zlib', required: true,
-                      fallback : ['zlib', 'zlib_dep'])
+conf.set('CONFIG_JSONC', json_c_dep.found(), description: 'Is json-c available?')
 
 # Check for libhugetlbfs availability (optional)
 if cc.has_header('hugetlbfs.h')
@@ -249,6 +251,11 @@ sources = [
   'plugin.c',
   'libnvme-wrap.c',
 ]
+if json_c_dep.found()
+    sources += [
+        'nvme-print-json.c',
+    ]
+endif
 
 subdir('ccan')
 subdir('plugins')
@@ -262,7 +269,7 @@ subdir('Documentation')
 executable(
   'nvme',
   sources,
-  dependencies: [ libnvme_dep, libnvme_mi_dep, json_c_dep, libz_dep,
+  dependencies: [ libnvme_dep, libnvme_mi_dep, json_c_dep,
                   libhugetlbfs_dep ],
   link_args: '-ldl',
   include_directories: incdir,
@@ -294,3 +301,19 @@ endforeach
 
 install_data(disc,
              install_dir: join_paths(sysconfdir, 'nvme'))
+
+################################################################################
+if meson.version().version_compare('>=0.53.0')
+    summary_dict = {
+        'prefixdir':         prefixdir,
+        'sysconfdir':        sysconfdir,
+        'sbindir':           sbindir,
+        'datadir':           datadir,
+        'mandir':            mandir,
+        'udevrulesdir':      udevrulesdir,
+        'dracutrulesdir':    dracutrulesdir,
+        'systemddir':        systemddir,
+        'build location':    meson.current_build_dir(),
+    }
+    summary(summary_dict)
+endif

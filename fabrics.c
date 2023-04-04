@@ -42,6 +42,7 @@
 #include "nvme.h"
 #include "libnvme.h"
 #include "nvme-print.h"
+#include "nvme-print-json.h"
 
 #define PATH_NVMF_DISC		SYSCONFDIR "/nvme/discovery.conf"
 #define PATH_NVMF_CONFIG	SYSCONFDIR "/nvme/config.json"
@@ -74,21 +75,24 @@ static const char *nvmf_keep_alive_tmo	= "keep alive timeout period in seconds";
 static const char *nvmf_reconnect_delay	= "reconnect timeout period in seconds";
 static const char *nvmf_ctrl_loss_tmo	= "controller loss timeout period in seconds";
 static const char *nvmf_tos		= "type of service";
+static const char *nvmf_keyring		= "Keyring for TLS key lookup";
+static const char *nvmf_tls_key		= "TLS key to use";
 static const char *nvmf_dup_connect	= "allow duplicate connections between same transport host and subsystem port";
 static const char *nvmf_disable_sqflow	= "disable controller sq flow control (default false)";
 static const char *nvmf_hdr_digest	= "enable transport protocol header digest (TCP transport)";
 static const char *nvmf_data_digest	= "enable transport protocol data digest (TCP transport)";
+static const char *nvmf_tls		= "enable TLS";
 static const char *nvmf_config_file	= "Use specified JSON configuration file or 'none' to disable";
 
 #define NVMF_OPTS(c)									\
 	OPT_STRING("transport",       't', "STR", &transport,	nvmf_tport), \
+	OPT_STRING("nqn",             'n', "STR", &subsysnqn,	nvmf_nqn), \
 	OPT_STRING("traddr",          'a', "STR", &traddr,	nvmf_traddr), \
 	OPT_STRING("trsvcid",         's', "STR", &trsvcid,	nvmf_trsvcid), \
 	OPT_STRING("host-traddr",     'w', "STR", &c.host_traddr,	nvmf_htraddr), \
 	OPT_STRING("host-iface",      'f', "STR", &c.host_iface,	nvmf_hiface), \
 	OPT_STRING("hostnqn",         'q', "STR", &hostnqn,	nvmf_hostnqn), \
 	OPT_STRING("hostid",          'I', "STR", &hostid,	nvmf_hostid), \
-	OPT_STRING("nqn",             'n', "STR", &subsysnqn,	nvmf_nqn), \
 	OPT_STRING("dhchap-secret",   'S', "STR", &hostkey,     nvmf_hostkey), \
 	OPT_INT("nr-io-queues",       'i', &c.nr_io_queues,       nvmf_nr_io_queues),	\
 	OPT_INT("nr-write-queues",    'W', &c.nr_write_queues,    nvmf_nr_write_queues),\
@@ -98,10 +102,13 @@ static const char *nvmf_config_file	= "Use specified JSON configuration file or 
 	OPT_INT("reconnect-delay",    'c', &c.reconnect_delay,    nvmf_reconnect_delay),\
 	OPT_INT("ctrl-loss-tmo",      'l', &c.ctrl_loss_tmo,      nvmf_ctrl_loss_tmo),	\
 	OPT_INT("tos",                'T', &c.tos,                nvmf_tos),		\
+	OPT_INT("keyring",              0, &c.keyring,            nvmf_keyring),	\
+	OPT_INT("tls_key",              0, &c.tls_key,            nvmf_tls_key),	\
 	OPT_FLAG("duplicate-connect", 'D', &c.duplicate_connect,  nvmf_dup_connect),	\
 	OPT_FLAG("disable-sqflow",    'd', &c.disable_sqflow,     nvmf_disable_sqflow),	\
 	OPT_FLAG("hdr-digest",        'g', &c.hdr_digest,         nvmf_hdr_digest),	\
-	OPT_FLAG("data-digest",       'G', &c.data_digest,        nvmf_data_digest)	\
+	OPT_FLAG("data-digest",       'G', &c.data_digest,        nvmf_data_digest), \
+	OPT_FLAG("tls",                 0, &c.tls,                nvmf_tls)	\
 
 struct tr_config {
 	const char *subsysnqn;
@@ -111,18 +118,6 @@ struct tr_config {
 	const char *host_iface;
 	const char *trsvcid;
 };
-
-static void space_strip_len(int max, char *str)
-{
-	int i;
-
-	for (i = max - 1; i >= 0; i--) {
-		if (str[i] != '\0' && str[i] != ' ')
-			return;
-		else
-			str[i] = '\0';
-	}
-}
 
 /*
  * Compare two C strings and handle NULL pointers gracefully.
@@ -304,9 +299,6 @@ static void print_discovery_log(struct nvmf_discovery_log *log, int numrec)
 	for (i = 0; i < numrec; i++) {
 		struct nvmf_disc_log_entry *e = &log->entries[i];
 
-		space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid);
-		space_strip_len(NVMF_TRADDR_SIZE, e->traddr);
-
 		printf("=====Discovery Log Entry %d======\n", i);
 		printf("trtype:  %s\n", nvmf_trtype_str(e->trtype));
 		printf("adrfam:  %s\n",
@@ -340,64 +332,6 @@ static void print_discovery_log(struct nvmf_discovery_log *log, int numrec)
 	}
 }
 
-static void json_discovery_log(struct nvmf_discovery_log *log, int numrec)
-{
-	struct json_object *root;
-	struct json_object *entries;
-	int i;
-
-	root = json_create_object();
-	entries = json_create_array();
-	json_object_add_value_uint64(root, "genctr", le64_to_cpu(log->genctr));
-	json_object_add_value_array(root, "records", entries);
-
-	for (i = 0; i < numrec; i++) {
-		struct nvmf_disc_log_entry *e = &log->entries[i];
-		struct json_object *entry = json_create_object();
-
-		space_strip_len(NVMF_TRSVCID_SIZE, e->trsvcid);
-		space_strip_len(NVMF_NQN_SIZE, e->subnqn);
-		space_strip_len(NVMF_TRADDR_SIZE, e->traddr);
-
-		json_object_add_value_string(entry, "trtype",
-					     nvmf_trtype_str(e->trtype));
-		json_object_add_value_string(entry, "adrfam",
-					     nvmf_adrfam_str(e->adrfam));
-		json_object_add_value_string(entry, "subtype",
-					     nvmf_subtype_str(e->subtype));
-		json_object_add_value_string(entry,"treq",
-					     nvmf_treq_str(e->treq));
-		json_object_add_value_uint(entry, "portid",
-					   le16_to_cpu(e->portid));
-		json_object_add_value_string(entry, "trsvcid", e->trsvcid);
-		json_object_add_value_string(entry, "subnqn", e->subnqn);
-		json_object_add_value_string(entry, "traddr", e->traddr);
-		json_object_add_value_string(entry, "eflags",
-					     nvmf_eflags_str(le16_to_cpu(e->eflags)));
-
-		switch (e->trtype) {
-		case NVMF_TRTYPE_RDMA:
-			json_object_add_value_string(entry, "rdma_prtype",
-				nvmf_prtype_str(e->tsas.rdma.prtype));
-			json_object_add_value_string(entry, "rdma_qptype",
-				nvmf_qptype_str(e->tsas.rdma.qptype));
-			json_object_add_value_string(entry, "rdma_cms",
-				nvmf_cms_str(e->tsas.rdma.cms));
-			json_object_add_value_uint(entry, "rdma_pkey",
-				le16_to_cpu(e->tsas.rdma.pkey));
-			break;
-		case NVMF_TRTYPE_TCP:
-			json_object_add_value_string(entry, "sectype",
-				nvmf_sectype_str(e->tsas.tcp.sectype));
-			break;
-		}
-		json_array_add_value_object(entries, entry);
-	}
-	json_print_object(root, NULL);
-	printf("\n");
-	json_free_object(root);
-}
-
 static void save_discovery_log(char *raw, struct nvmf_discovery_log *log)
 {
 	uint64_t numrec = le64_to_cpu(log->numrec);
@@ -425,18 +359,6 @@ static void save_discovery_log(char *raw, struct nvmf_discovery_log *log)
 static void print_connect_msg(nvme_ctrl_t c)
 {
 	printf("device: %s\n", nvme_ctrl_get_name(c));
-}
-
-static void json_connect_msg(nvme_ctrl_t c)
-{
-	struct json_object *root;
-
-	root = json_create_object();
-	json_object_add_value_string(root, "device", nvme_ctrl_get_name(c));
-
-	json_print_object(root, NULL);
-	printf("\n");
-	json_free_object(root);
 }
 
 static int __discover(nvme_ctrl_t c, struct nvme_fabrics_config *defcfg,
@@ -563,7 +485,6 @@ static int __discover(nvme_ctrl_t c, struct nvme_fabrics_config *defcfg,
 			} else if (errno == ENVME_CONNECT_ALREADY && !quiet) {
 				char *traddr = log->entries[i].traddr;
 
-				space_strip_len(NVMF_TRADDR_SIZE, traddr);
 				fprintf(stderr,
 					"traddr=%s is already connected\n",
 					traddr);
@@ -908,6 +829,20 @@ int nvmf_discover(const char *desc, int argc, char **argv, bool connect)
 				 * on exit.
 				 */
 				persistent = true;
+				/*
+				 * When --host-traddr/--host-iface are not specified on the
+				 * command line, use the discovery controller's (c) host-
+				 * traddr/host-iface for the connections to controllers
+				 * returned in the Discovery Log Pages. This is essential
+				 * when invoking "connect-all" with --device to reuse an
+				 * existing persistent discovery controller (as is done
+				 * for the udev rules). This ensures that host-traddr/
+				 * host-iface are consistent with the discovery controller (c).
+				 */
+				if (!cfg.host_traddr)
+					cfg.host_traddr = (char *)nvme_ctrl_get_host_traddr(c);
+				if (!cfg.host_iface)
+					cfg.host_iface = (char *)nvme_ctrl_get_host_iface(c);
 			}
 		} else {
 			/*

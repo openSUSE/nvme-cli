@@ -23,14 +23,17 @@ SYNOPSIS
 		[--keep-alive-tmo=<sec>   | -k <sec>]
 		[--reconnect-delay=<#>	  | -c <#>]
 		[--ctrl-loss-tmo=<#>	  | -l <#>]
-		[--hdr_digest             | -g]
-		[--data_digest            | -G]
 		[--nr-io-queues=<#>       | -i <#>]
 		[--nr-write-queues=<#>    | -W <#>]
 		[--nr-poll-queues=<#>     | -P <#>]
 		[--queue-size=<#>         | -Q <#>]
+		[--keyring=<#>                    ]
+		[--tls_key=<#>                    ]
+		[--hdr-digest             | -g]
+		[--data-digest            | -G]
 		[--persistent             | -p]
 		[--quiet                  | -S]
+		[--tls                        ]
 		[--dump-config            | -O]
 		[--output-format=<fmt>    | -o <fmt>]
 		[--force]
@@ -97,7 +100,7 @@ OPTIONS
 --traddr=<traddr>::
 	This field specifies the network address of the Discovery Controller.
 	For transports using IP addressing (e.g. rdma) this should be an
-	IP-based (ex. IPv4) address.
+	IP-based address (ex. IPv4).
 
 -s <trsvcid>::
 --trsvcid=<trsvcid>::
@@ -137,8 +140,10 @@ OPTIONS
 
 -d <device>::
 --device=<device>::
-	This field takes a device as input. Device is in the format of nvme*,
-	eg. nvme0, nvme1
+	This field takes a device as input. It must be a persistent device
+	associated with a Discovery Controller previously created by the
+	command "connect-all" or "discover". <device> follows the format
+	nvme*, eg. nvme0, nvme1.
 
 -C <cfg>::
 --config-file=<cfg>::
@@ -150,8 +155,8 @@ OPTIONS
 
 -k <#>::
 --keep-alive-tmo=<#>::
-	Overrides the default timeout (in seconds) for keep alive.
-	This option will be ignored for the discovery, and it is only
+	Overrides the default keep alive timeout (in seconds). This
+	option will be ignored for discovery, and it is only
 	implemented for completeness.
 
 -c <#>::
@@ -162,14 +167,6 @@ OPTIONS
 -l <#>::
 --ctrl-loss-tmo=<#>::
 	Overrides the default controller loss timeout period (in seconds).
-
--g::
---hdr_digest::
-	Generates/verifies header digest (TCP).
-
--G::
---data_digest::
-	Generates/verifies data digest (TCP).
 
 -i <#>::
 --nr-io-queues=<#>::
@@ -192,9 +189,27 @@ OPTIONS
 	This option will be ignored for the discovery, and it is only
 	implemented for completeness.
 
+--keyring=<#>::
+	Keyring for TLS key lookup.
+
+--tls_key=<#>::
+	TLS key for the connection (TCP).
+
+-g::
+--hdr-digest::
+	Generates/verifies header digest (TCP).
+
+-G::
+--data-digest::
+	Generates/verifies data digest (TCP).
+
 -p::
 --persistent::
-	Persistent discovery connection.
+	Don't remove the discovery controller after retrieving the discovery
+	log page.
+
+--tls::
+	Enable TLS encryption (TCP).
 
 -S::
 --quiet::

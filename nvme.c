@@ -39,7 +39,6 @@
 #include <math.h>
 #include <dirent.h>
 #include <libgen.h>
-#include <zlib.h>
 #include <signal.h>
 
 #ifdef CONFIG_LIBHUGETLBFS
@@ -62,6 +61,7 @@
 #include "nvme-print.h"
 #include "plugin.h"
 #include "util/base64.h"
+#include "util/crc32.h"
 #include "nvme-wrap.h"
 
 #include "util/argconfig.h"
@@ -409,7 +409,7 @@ static int get_dev(struct nvme_dev **dev, int argc, char **argv, int flags)
 
 int parse_and_open(struct nvme_dev **dev, int argc, char **argv,
 		   const char *desc,
-		   const struct argconfig_commandline_options *opts)
+		   struct argconfig_commandline_options *opts)
 {
 	int ret;
 
@@ -596,99 +596,174 @@ ret:
 	return err;
 }
 
-static int get_telemetry_log_helper(struct nvme_dev *dev, bool create,
-				    bool ctrl, struct nvme_telemetry_log **buf,
-				    enum nvme_telemetry_da da,
-				    size_t *size)
+static int parse_telemetry_da(struct nvme_dev *dev,
+			      enum nvme_telemetry_da da,
+			      struct nvme_telemetry_log *telem,
+			      size_t *size)
+
 {
-	static const __u32 xfer = NVME_LOG_TELEM_BLOCK_SIZE;
-	struct nvme_telemetry_log *telem;
 	struct nvme_id_ctrl id_ctrl;
-	void *log, *tmp;
-	int err;
-	*size = 0;
-
-	log = calloc(1, xfer);
-	if (!log)
-		return -ENOMEM;
-
-	if (ctrl) {
-		/* set rae = true so it won't clear the current telemetry log in controller */
-		err = nvme_cli_get_log_telemetry_ctrl(dev, true, 0, xfer, log);
-	} else {
-		if (create)
-			err = nvme_cli_get_log_create_telemetry_host(dev, log);
-		else
-			err = nvme_cli_get_log_telemetry_host(dev, 0, xfer, log);
-	}
-
-	if (err)
-		goto free;
-
-	telem = log;
-	if (ctrl && !telem->ctrlavail) {
-		*buf = log;
-		*size = xfer;
-		printf("Warning: Telemetry Controller-Initiated Data Not Available.\n");
-		return 0;
-	}
 
 	switch (da) {
 	case NVME_TELEMETRY_DA_1:
 	case NVME_TELEMETRY_DA_2:
 	case NVME_TELEMETRY_DA_3:
 		/* dalb3 >= dalb2 >= dalb1 */
-		*size = (le16_to_cpu(telem->dalb3) + 1) * xfer;
+		*size = (le16_to_cpu(telem->dalb3) + 1) *
+			NVME_LOG_TELEM_BLOCK_SIZE;
 		break;
 	case NVME_TELEMETRY_DA_4:
-		err = nvme_cli_identify_ctrl(dev, &id_ctrl);
-		if (err) {
+		if (nvme_cli_identify_ctrl(dev, &id_ctrl)) {
 			perror("identify-ctrl");
-			goto free;
+			return -errno;
 		}
 
 		if (id_ctrl.lpa & 0x40) {
-			*size = (le32_to_cpu(telem->dalb4) + 1) * xfer;
+			*size = (le32_to_cpu(telem->dalb4) + 1) *
+				NVME_LOG_TELEM_BLOCK_SIZE;
 		} else {
-			fprintf(stderr, "Data area 4 unsupported, bit 6 of Log Page Attributes not set\n");
-			err = -EINVAL;
-			goto free;
+			fprintf(stderr, "Data area 4 unsupported, bit 6 "
+				"of Log Page Attributes not set\n");
+			return -EINVAL;
 		}
 		break;
 	default:
 		fprintf(stderr, "Invalid data area parameter - %d\n", da);
-		err = -EINVAL;
+		return -EINVAL;
+	}
+
+	if (*size == NVME_LOG_TELEM_BLOCK_SIZE) {
+		fprintf(stderr, "ERROR: No telemetry data block\n");
+		return -ENOENT;
+	}
+	return 0;
+}
+
+static int get_log_telemetry_ctrl(struct nvme_dev *dev, bool rae, size_t size,
+				  struct nvme_telemetry_log **buf)
+{
+	struct nvme_telemetry_log *log;
+	int err;
+
+	log = calloc(1, size);
+	if (!log)
+		return -errno;
+
+	err = nvme_cli_get_log_telemetry_ctrl(dev, rae, 0, size, log);
+	if (err) {
+		free(log);
+		return -errno;
+	}
+
+	*buf = log;
+	return 0;
+}
+
+static int get_log_telemetry_host(struct nvme_dev *dev, size_t size,
+				  struct nvme_telemetry_log **buf)
+{
+	struct nvme_telemetry_log *log;
+	int err;
+
+	log = calloc(1, size);
+	if (!log)
+		return -errno;
+
+	err = nvme_cli_get_log_telemetry_host(dev, 0, size, log);
+	if (err) {
+		free(log);
+		return -errno;
+	}
+
+	*buf = log;
+	return 0;
+}
+
+static int __create_telemetry_log_host(struct nvme_dev *dev,
+				       enum nvme_telemetry_da da,
+				       size_t *size,
+				       struct nvme_telemetry_log **buf)
+{
+	struct nvme_telemetry_log log = { 0 };
+	int err;
+
+	err = nvme_cli_get_log_create_telemetry_host(dev, &log);
+	if (err)
+		return -errno;
+
+	*size = NVME_LOG_TELEM_BLOCK_SIZE;
+	return get_log_telemetry_host(dev, NVME_LOG_TELEM_BLOCK_SIZE, buf);
+}
+
+static int __get_telemetry_log_ctrl(struct nvme_dev *dev,
+				    bool rae,
+				    enum nvme_telemetry_da da,
+				    size_t *size,
+				    struct nvme_telemetry_log **buf)
+{
+	struct nvme_telemetry_log *log;
+	int err;
+
+	log = calloc(1, NVME_LOG_TELEM_BLOCK_SIZE);
+	if (!log)
+		return -errno;
+
+	/*
+	 * set rae = true so it won't clear the current telemetry log in
+	 * controller
+	 */
+	err = nvme_cli_get_log_telemetry_ctrl(dev, true, 0,
+					      NVME_LOG_TELEM_BLOCK_SIZE,
+					      log);
+	if (err)
 		goto free;
-	}
 
-	if (xfer == *size) {
-		fprintf(stderr, "ERRO: No telemetry data block\n");
-		err = -ENOENT;
-		goto free;
-	}
+	if (!log->ctrlavail) {
+		if (!rae) {
+			err = nvme_cli_get_log_telemetry_ctrl(dev, rae, 0,
+							      NVME_LOG_TELEM_BLOCK_SIZE,
+							      log);
+			goto free;
+		}
 
-	tmp = realloc(log, *size);
-	if (!tmp) {
-		err = -ENOMEM;
-		goto free;
-	}
-	log = tmp;
-
-	if (ctrl) {
-		err = nvme_cli_get_log_telemetry_ctrl(dev, true, 0, *size, log);
-	} else {
-		err = nvme_cli_get_log_telemetry_host(dev, 0, *size, log);
-	}
-
-	if (!err) {
+		*size = NVME_LOG_TELEM_BLOCK_SIZE;
 		*buf = log;
+
+		printf("Warning: Telemetry Controller-Initiated Data Not Available.\n");
 		return 0;
 	}
+
+	err = parse_telemetry_da(dev, da, log, size);
+	if (err)
+		goto free;
+
+	return get_log_telemetry_ctrl(dev, rae, *size, buf);
+
 free:
 	free(log);
 	return err;
 }
 
+static int __get_telemetry_log_host(struct nvme_dev *dev,
+				    enum nvme_telemetry_da da,
+				    size_t *size,
+				    struct nvme_telemetry_log **buf)
+{
+	struct nvme_telemetry_log log = { 0 };
+	int err;
+
+	err = nvme_cli_get_log_telemetry_host(dev, 0,
+					      NVME_LOG_TELEM_BLOCK_SIZE,
+					      &log);
+	if (err)
+		return  err;
+
+	err = parse_telemetry_da(dev, da, &log, size);
+	if (err)
+		return err;
+
+	return get_log_telemetry_host(dev, *size, buf);
+}
 
 static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 			     struct plugin *plugin)
@@ -698,7 +773,7 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 	const char *hgen = "Have the host tell the controller to generate the report";
 	const char *cgen = "Gather report generated by the controller.";
 	const char *dgen = "Pick which telemetry data area to report. Default is 3 to fetch areas 1-3. Valid options are 1, 2, 3, 4.";
-	struct nvme_telemetry_log *log;
+	struct nvme_telemetry_log *log = NULL;
 	int err = 0, output;
 	size_t total_size;
 	__u8 *data_ptr = NULL;
@@ -710,12 +785,14 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 		__u32	host_gen;
 		bool	ctrl_init;
 		int	data_area;
+		bool	rae;
 	};
 	struct config cfg = {
 		.file_name	= NULL,
 		.host_gen	= 1,
 		.ctrl_init	= false,
 		.data_area	= 3,
+		.rae		= true,
 	};
 
 	OPT_ARGS(opts) = {
@@ -723,6 +800,7 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 		OPT_UINT("host-generate",   'g', &cfg.host_gen,  hgen),
 		OPT_FLAG("controller-init", 'c', &cfg.ctrl_init, cgen),
 		OPT_UINT("data-area",       'd', &cfg.data_area, dgen),
+		OPT_FLAG("rae",             'r', &cfg.rae, rae),
 		OPT_END()
 	};
 
@@ -746,17 +824,14 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 	}
 
 	if (cfg.ctrl_init)
-		/* Create Telemetry Host-Initiated Data = false, Controller-Initiated = true */
-		err = get_telemetry_log_helper(dev, false, true, &log,
-					       cfg.data_area, &total_size);
+		err = __get_telemetry_log_ctrl(dev, cfg.rae, cfg.data_area,
+					       &total_size, &log);
 	else if (cfg.host_gen)
-		/* Create Telemetry Host-Initiated Data = true, Controller-Initiated = false */
-		err = get_telemetry_log_helper(dev, true, false, &log,
-					       cfg.data_area, &total_size);
+		err = __create_telemetry_log_host(dev, cfg.data_area,
+						  &total_size, &log);
 	else
-		/* Create Telemetry Host-Initiated Data = false, Controller-Initiated = false */
-		err = get_telemetry_log_helper(dev, false, false, &log,
-					       cfg.data_area, &total_size);
+		err = __get_telemetry_log_host(dev, cfg.data_area,
+					       &total_size, &log);
 
 	if (err < 0) {
 		fprintf(stderr, "get-telemetry-log: %s\n",
@@ -922,31 +997,36 @@ static int get_effects_log(int argc, char **argv, struct command *cmd, struct pl
 	list_head_init(&log_pages);
 
 	if (cfg.csi < 0) {
-		nvme_root_t nvme_root;
-		uint64_t cap;
-		int nvme_command_set_supported;
-		int other_command_sets_supported;
-		nvme_root = nvme_scan(NULL);
-		bar = mmap_registers(nvme_root, dev);
-		nvme_free_tree(nvme_root);
+		nvme_root_t r;
+		__u64 cap;
 
-		if (!bar) {
-			goto close_dev;
+		r = nvme_scan(NULL);
+		bar = mmap_registers(r, dev);
+		nvme_free_tree(r);
+
+		if (bar) {
+			cap = mmio_read64(bar + NVME_REG_CAP);
+			munmap(bar, getpagesize());
+		} else {
+			struct nvme_get_property_args args = {
+				.args_size	= sizeof(args),
+				.fd		= dev_fd(dev),
+				.offset		= NVME_REG_CAP,
+				.value		= &cap,
+				.timeout	= NVME_DEFAULT_IOCTL_TIMEOUT,
+			};
+			err = nvme_get_property(&args);
+			if (err)
+				goto close_dev;
 		}
-		cap = mmio_read64(bar + NVME_REG_CAP);
-		munmap(bar, getpagesize());
 
-		nvme_command_set_supported = NVME_CAP_CSS(cap) & NVME_CAP_CSS_NVM;
-		other_command_sets_supported = NVME_CAP_CSS(cap) & NVME_CAP_CSS_CSI;
-
-		if (nvme_command_set_supported)
+		if (NVME_CAP_CSS(cap) & NVME_CAP_CSS_NVM)
 			err = collect_effects_log(dev, NVME_CSI_NVM,
 						  &log_pages, flags);
 
-		if (!err && other_command_sets_supported)
+		if (!err && (NVME_CAP_CSS(cap) & NVME_CAP_CSS_CSI))
 			err = collect_effects_log(dev, NVME_CSI_ZNS,
 						  &log_pages, flags);
-
 	} else {
 		err = collect_effects_log(dev, cfg.csi, &log_pages, flags);
 	}
@@ -1736,7 +1816,7 @@ static int get_boot_part_log(int argc, char **argv, struct command *cmd, struct 
 		goto close_dev;
 	}
 
-	if (cfg.lsp > 128) {
+	if (cfg.lsp > 127) {
 		fprintf(stderr, "invalid lsp param: %u\n", cfg.lsp);
 		err = -1;
 		goto close_dev;
@@ -2115,6 +2195,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 	const char *raw = "output in raw format";
 	const char *csi = "command set identifier";
 	const char *offset_type = "offset type";
+	const char *xfer_len = "read chunk size (default 4k)";
 	struct nvme_dev *dev;
 	unsigned char *log;
 	int err;
@@ -2132,6 +2213,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		bool	raw_binary;
 		__u8	csi;
 		bool	ot;
+		__u32	xfer_len;
 	};
 
 	struct config cfg = {
@@ -2147,6 +2229,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		.raw_binary	= false,
 		.csi		= NVME_CSI_NVM,
 		.ot		= false,
+		.xfer_len	= 4096,
 	};
 
 	OPT_ARGS(opts) = {
@@ -2162,6 +2245,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		OPT_FLAG("raw-binary",   'b', &cfg.raw_binary,   raw),
 		OPT_BYTE("csi",          'y', &cfg.csi,          csi),
 		OPT_FLAG("ot",           'O', &cfg.ot,           offset_type),
+		OPT_UINT("xfer-len",     'x', &cfg.xfer_len,     xfer_len),
 		OPT_END()
 	};
 
@@ -2174,20 +2258,26 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		cfg.log_id = (cfg.aen >> 16) & 0xff;
 	}
 
-	if (!cfg.log_len) {
-		perror("non-zero log-len is required param\n");
+	if (!cfg.log_len || cfg.log_len & 0x3) {
+		fprintf(stderr, "non-zero or non-dw alignment log-len is required param\n");
 		err = -EINVAL;
 		goto close_dev;
 	}
 
-	if (cfg.lsp > 128) {
-		perror("invalid lsp param\n");
+	if (cfg.lsp > 127) {
+		fprintf(stderr, "invalid lsp param\n");
 		err = -EINVAL;
 		goto close_dev;
 	}
 
-	if (cfg.uuid_index > 128) {
-		perror("invalid uuid index param\n");
+	if (cfg.uuid_index > 127) {
+		fprintf(stderr, "invalid uuid index param\n");
+		err = -EINVAL;
+		goto close_dev;
+	}
+
+	if (cfg.xfer_len == 0 || cfg.xfer_len % 4096) {
+		fprintf(stderr, "xfer-len argument invalid. It needs to be mulitple of 4k");
 		err = -EINVAL;
 		goto close_dev;
 	}
@@ -2214,7 +2304,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 		.log		= log,
 		.result		= NULL,
 	};
-	err = nvme_cli_get_log(dev, &args);
+	err = nvme_cli_get_log_page(dev, cfg.xfer_len, &args);
 	if (!err) {
 		if (!cfg.raw_binary) {
 			printf("Device:%s log-id:%d namespace-id:%#x\n",
@@ -2810,10 +2900,10 @@ static int detach_ns(int argc, char **argv, struct command *cmd, struct plugin *
 static int parse_lba_num_si(struct nvme_dev *dev, const char *opt,
 			    const char *val, __u8 flbas, __u64 *num)
 {
-	bool suffixed = false;
 	struct nvme_id_ctrl ctrl;
 	__u32 nsid = 1;
 	struct nvme_id_ns ns;
+	char *endptr;
 	int err = -EINVAL;
 	int i;
 	int lbas;
@@ -2874,17 +2964,17 @@ static int parse_lba_num_si(struct nvme_dev *dev, const char *opt,
 	i = flbas & NVME_NS_FLBAS_LOWER_MASK;
 	lbas = (1 << ns.lbaf[i].ds) + ns.lbaf[i].ms;
 
-	*num = suffix_si_parse(val, &suffixed);
-
-	if (errno)
+	if (suffix_si_parse(val, &endptr, (uint64_t*)num)) {
 		fprintf(stderr,
 			"Expected long suffixed integer argument for '%s-si' but got '%s'!\n",
 			opt, val);
+		return -errno;
+	}
 
-	if (suffixed)
+	if (endptr[0] != '\0')
 		*num /= lbas;
 
-	return errno;
+	return 0;
 }
 
 static int create_ns(int argc, char **argv, struct command *cmd, struct plugin *plugin)
@@ -4249,7 +4339,7 @@ static void abort_self_test(struct nvme_dev_self_test_args *args)
 {
 	int err;
 
-	args->stc = NVME_ST_CODE_ABORT,
+	args->stc = NVME_DST_STC_ABORT;
 
 	err = nvme_dev_self_test(args);
 	if (!err) {
@@ -4413,6 +4503,8 @@ ret:
 static int get_feature_id(struct nvme_dev *dev, struct feat_cfg *cfg,
 			  void **buf, __u32 *result)
 {
+	size_t size;
+
 	if (!cfg->data_len)
 		nvme_get_feature_length(cfg->feature_id, cfg->cdw11,
 					&cfg->data_len);
@@ -4430,10 +4522,11 @@ static int get_feature_id(struct nvme_dev *dev, struct feat_cfg *cfg,
 		cfg->data_len = 0;
 
 	if (cfg->data_len) {
-		if (posix_memalign(buf, getpagesize(), cfg->data_len)) {
+		/* rounding up size to page size */
+		size = ((cfg->data_len - 1) / getpagesize() + 1) * getpagesize();
+		if (posix_memalign(buf, getpagesize(), size))
 			return -1;
-		}
-		memset(*buf, 0, cfg->data_len);
+		memset(*buf, 0, size);
 	}
 
 	struct nvme_get_features_args args = {
@@ -4451,9 +4544,18 @@ static int get_feature_id(struct nvme_dev *dev, struct feat_cfg *cfg,
 	return nvme_cli_get_features(dev, &args);
 }
 
+static int filter_out_flags(int status)
+{
+	return status & (NVME_GET(NVME_SCT_MASK, SCT) |
+			 NVME_GET(NVME_SC_MASK, SC));
+}
+
 static void get_feature_id_print(struct feat_cfg cfg, int err, __u32 result,
 				 void *buf)
 {
+	int status = filter_out_flags(err);
+	enum nvme_status_type type = NVME_STATUS_TYPE_NVME;
+
 	if (!err) {
 		if (!cfg.raw_binary || !buf) {
 			printf("get-feature:%#0*x (%s), %s value:%#0*x\n",
@@ -4472,8 +4574,8 @@ static void get_feature_id_print(struct feat_cfg cfg, int err, __u32 result,
 			d_raw(buf, cfg.data_len);
 		}
 	} else if (err > 0) {
-		if (!nvme_status_equals(err, NVME_STATUS_TYPE_NVME,
-					NVME_SC_INVALID_FIELD))
+		if (!nvme_status_equals(status, type, NVME_SC_INVALID_FIELD) &&
+		    !nvme_status_equals(status,  type, NVME_SC_INVALID_NS))
 			nvme_show_status(err);
 	} else {
 		fprintf(stderr, "get-feature: %s\n", nvme_strerror(errno));
@@ -4520,6 +4622,8 @@ static int get_feature_ids(struct nvme_dev *dev, struct feat_cfg cfg)
 	int feat_max = 0x100;
 	int feat_num = 0;
 	bool changed = false;
+	int status = 0;
+	enum nvme_status_type type = NVME_STATUS_TYPE_NVME;
 
 	if (cfg.sel == 8)
 		changed = true;
@@ -4530,13 +4634,21 @@ static int get_feature_ids(struct nvme_dev *dev, struct feat_cfg cfg)
 	for (i = cfg.feature_id; i < feat_max; i++, feat_num++) {
 		cfg.feature_id = i;
 		err = get_feature_id_changed(dev, cfg, changed);
-		if (err && !nvme_status_equals(err, NVME_STATUS_TYPE_NVME,
-					       NVME_SC_INVALID_FIELD))
+		if (!err)
+			continue;
+		status = filter_out_flags(err);
+		if (nvme_status_equals(status, type, NVME_SC_INVALID_FIELD))
+			continue;
+		if (!nvme_status_equals(status, type, NVME_SC_INVALID_NS))
 			break;
+		fprintf(stderr, "get-feature:%#0*x (%s): ",
+			cfg.feature_id ? 4 : 2, cfg.feature_id,
+			nvme_feature_to_string(cfg.feature_id));
+		nvme_show_status(err);
 	}
 
-	if (feat_num == 1 && nvme_status_equals(err, NVME_STATUS_TYPE_NVME,
-						NVME_SC_INVALID_FIELD))
+	if (feat_num == 1 &&
+	    nvme_status_equals(status, type, NVME_SC_INVALID_FIELD))
 		nvme_show_status(err);
 
 	return err;
@@ -4589,7 +4701,7 @@ static int get_feature(int argc, char **argv, struct command *cmd,
 	if (err)
 		goto ret;
 
-	if (!cfg.namespace_id) {
+	if (!argconfig_parse_seen(opts, "namespace-id")) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
 		if (err < 0) {
 			if (errno != ENOTTY) {
@@ -4600,13 +4712,13 @@ static int get_feature(int argc, char **argv, struct command *cmd,
 		}
 	}
 
-	if (cfg.sel > 8) {
+	if (cfg.sel > 7) {
 		fprintf(stderr, "invalid 'select' param:%d\n", cfg.sel);
 		err = -EINVAL;
 		goto close_dev;
 	}
 
-	if (cfg.uuid_index > 128) {
+	if (cfg.uuid_index > 127) {
 		fprintf(stderr, "invalid uuid index param: %u\n", cfg.uuid_index);
 		err = -1;
 		goto close_dev;
@@ -4731,6 +4843,7 @@ static int fw_download(int argc, char **argv, struct command *cmd, struct plugin
 	struct stat sb;
 	void *fw_buf;
 	bool huge;
+	struct nvme_id_ctrl ctrl;
 
 	struct config {
 		char	*fw;
@@ -4783,7 +4896,18 @@ static int fw_download(int argc, char **argv, struct command *cmd, struct plugin
 		goto close_fw_fd;
 	}
 
-	if (cfg.xfer == 0 || cfg.xfer % 4096)
+	if (cfg.xfer == 0) {
+		err = nvme_cli_identify_ctrl(dev, &ctrl);
+		if (err) {
+			fprintf(stderr, "identify-ctrl: %s\n", nvme_strerror(errno));
+			goto close_fw_fd;
+		}
+		if (ctrl.fwug == 0 || ctrl.fwug == 0xff)
+			cfg.xfer = 4096;
+		else
+			cfg.xfer = ctrl.fwug * 4096;
+	}
+	else if (cfg.xfer % 4096)
 		cfg.xfer = 4096;
 
 	if (cfg.xfer < HUGE_MIN)
@@ -4834,11 +4958,46 @@ ret:
 static char *nvme_fw_status_reset_type(__u16 status)
 {
 	switch (status & 0x7ff) {
-	case NVME_SC_FW_NEEDS_CONV_RESET:	return "conventional";
-	case NVME_SC_FW_NEEDS_SUBSYS_RESET:	return "subsystem";
-	case NVME_SC_FW_NEEDS_RESET:		return "any controller";
-	default:				return "unknown";
+	case NVME_SC_FW_NEEDS_CONV_RESET:
+		return "conventional";
+	case NVME_SC_FW_NEEDS_SUBSYS_RESET:
+		return "subsystem";
+	case NVME_SC_FW_NEEDS_RESET:
+		return "any controller";
+	default:
+		return "unknown";
 	}
+}
+
+static bool fw_commit_support_mud(struct nvme_dev *dev)
+{
+	struct nvme_id_ctrl ctrl;
+	int err;
+
+	err = nvme_cli_identify_ctrl(dev, &ctrl);
+
+	if (err)
+		fprintf(stderr, "identify-ctrl: %s\n", nvme_strerror(errno));
+	else if (ctrl.frmw >> 5 & 0x1)
+		return true;
+
+	return false;
+}
+
+static void fw_commit_print_mud(struct nvme_dev *dev, __u32 result)
+{
+	if (!fw_commit_support_mud(dev))
+		return;
+
+	printf("Multiple Update Detected (MUD) Value: %u\n", result);
+
+	if (result & 0x1)
+		printf("Detected an overlapping firmware/boot partition image update command "\
+		       "sequence due to processing a command from a Management Endpoint");
+
+	if (result >> 1 & 0x1)
+		printf("Detected an overlapping firmware/boot partition image update command "\
+		       "sequence due to processing a command from an Admin SQ on a controller");
 }
 
 static int fw_commit(int argc, char **argv, struct command *cmd, struct plugin *plugin)
@@ -4935,16 +5094,7 @@ static int fw_commit(int argc, char **argv, struct command *cmd, struct plugin *
 		if (cfg.action == 6 || cfg.action == 7)
 			printf(" bpid:%d", cfg.bpid);
 		printf("\n");
-	}
-
-	if (err >= 0) {
-		printf("Multiple Update Detected (MUD) Value: %u\n", result);
-		if (result & 0x1)
-			printf("Detected an overlapping firmware/boot partition image update command "\
-				"sequence due to processing a command from a Management Endpoint");
-		if ((result >> 1) & 0x1)
-			printf("Detected an overlapping firmware/boot partition image update command "\
-				"sequence due to processing a command from an Admin SQ on a controller");
+		fw_commit_print_mud(dev, result);
 	}
 
 close_dev:
@@ -5121,8 +5271,8 @@ static int sanitize(int argc, char **argv, struct command *cmd, struct plugin *p
 	}
 
 	if (sanact == NVME_SANITIZE_SANACT_START_OVERWRITE) {
-		if (cfg.owpass > 16) {
-			fprintf(stderr, "OWPASS out of range [0-16]\n");
+		if (cfg.owpass > 15) {
+			fprintf(stderr, "OWPASS out of range [0-15]\n");
 			err = -EINVAL;
 			goto close_dev;
 		}
@@ -5160,14 +5310,14 @@ static int nvme_get_properties(int fd, void **pbar)
 {
 	int offset, err, size = getpagesize();
 	__u64 value;
+	void *bar = malloc(size);
 
-	*pbar = malloc(size);
-	if (!*pbar) {
+	if (!bar) {
 		fprintf(stderr, "malloc: %s\n", strerror(errno));
 		return -1;
 	}
 
-	memset(*pbar, 0xff, size);
+	memset(bar, 0xff, size);
 	for (offset = NVME_REG_CAP; offset <= NVME_REG_CMBSZ;) {
 		struct nvme_get_property_args args = {
 			.args_size	= sizeof(args),
@@ -5185,17 +5335,21 @@ static int nvme_get_properties(int fd, void **pbar)
 		} else if (err) {
 			fprintf(stderr, "get-property: %s\n",
 				nvme_strerror(errno));
-			free(*pbar);
 			break;
 		}
 		if (nvme_is_64bit_reg(offset)) {
-			*(uint64_t *)(*pbar + offset) = value;
+			*(uint64_t *)(bar + offset) = value;
 			offset += 8;
 		} else {
-			*(uint32_t *)(*pbar + offset) = value;
+			*(uint32_t *)(bar + offset) = value;
 			offset += 4;
 		}
 	}
+
+	if (err)
+		free(bar);
+	else
+		*pbar = bar;
 
 	return err;
 }
@@ -5290,7 +5444,7 @@ static int show_registers(int argc, char **argv, struct command *cmd, struct plu
 	bar = mmap_registers(r, dev);
 	if (!bar) {
 		err = nvme_get_properties(dev_fd(dev), &bar);
-		if (!bar)
+		if (err)
 			goto close_dev;
 		fabrics = true;
 	}
@@ -5500,12 +5654,11 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 	if (err) {
 		if (errno == EBUSY) {
 			fprintf(stderr, "Failed to open %s.\n",
-		                basename(argv[optind]));
-			fprintf(stderr,
-				"Namespace is currently busy.\n");
+				basename(argv[optind]));
+			fprintf(stderr, "Namespace is currently busy.\n");
 			if (!cfg.force)
 				fprintf(stderr,
-				"Use the force [--force] option to ignore that.\n");
+					"Use the force [--force] option to ignore that.\n");
 		} else {
 			argconfig_print_help(desc, opts);
 		}
@@ -5522,7 +5675,7 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 		if ((cfg.bs & (~cfg.bs + 1)) != cfg.bs) {
 			fprintf(stderr,
 				"Invalid value for block size (%"PRIu64"), must be a power of two\n",
-				       (uint64_t) cfg.bs);
+				(uint64_t) cfg.bs);
 			err = -EINVAL;
 			goto close_dev;
 		}
@@ -5561,9 +5714,9 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 	if (cfg.namespace_id != NVME_NSID_ALL) {
 		err = nvme_cli_identify_ns(dev, cfg.namespace_id, &ns);
 		if (err) {
-			if (err < 0)
+			if (err < 0) {
 				fprintf(stderr, "identify-namespace: %s\n", nvme_strerror(errno));
-			else {
+			} else {
 				fprintf(stderr, "identify failed\n");
 				nvme_show_status(err);
 			}
@@ -5588,10 +5741,12 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 				err = -EINVAL;
 				goto close_dev;
 			}
-		} else  if (cfg.lbaf == 0xff)
+		} else  if (cfg.lbaf == 0xff) {
 			cfg.lbaf = prev_lbaf;
+		}
 	} else {
-		if (cfg.lbaf == 0xff) cfg.lbaf = 0;
+		if (cfg.lbaf == 0xff)
+			cfg.lbaf = 0;
 	}
 
 	/* ses & pi checks set to 7 for forward-compatibility */
@@ -5626,7 +5781,8 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 			dev->name, cfg.namespace_id,
 			cfg.namespace_id == NVME_NSID_ALL ? "(ALL namespaces)" : "");
 		nvme_show_relatives(dev->name);
-		fprintf(stderr, "WARNING: Format may irrevocably delete this device's data.\n"
+		fprintf(stderr,
+			"WARNING: Format may irrevocably delete this device's data.\n"
 			"You have 10 seconds to press Ctrl-C to cancel this operation.\n\n"
 			"Use the force [--force] option to suppress this warning.\n");
 		sleep(10);
@@ -5646,13 +5802,13 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 		.result		= NULL,
 	};
 	err = nvme_cli_format_nvm(dev, &args);
-	if (err < 0)
+	if (err < 0) {
 		fprintf(stderr, "format: %s\n", nvme_strerror(errno));
-	else if (err != 0)
+	} else if (err != 0) {
 		nvme_show_status(err);
-	else {
+	} else {
 		printf("Success formatting namespace:%x\n", cfg.namespace_id);
-		if (dev->type == NVME_DEV_DIRECT && cfg.lbaf != prev_lbaf){
+		if (dev->type == NVME_DEV_DIRECT && cfg.lbaf != prev_lbaf) {
 			if (is_chardev(dev)) {
 				if (ioctl(dev_fd(dev), NVME_IOCTL_RESCAN) < 0) {
 					fprintf(stderr, "failed to rescan namespaces\n");
@@ -5671,7 +5827,7 @@ static int format(int argc, char **argv, struct command *cmd, struct plugin *plu
 				 */
 				if (ioctl(dev_fd(dev), BLKBSZSET, &block_size) < 0) {
 					fprintf(stderr, "failed to set block size to %d\n",
-							block_size);
+						block_size);
 					err = -errno;
 					goto close_dev;
 				}
@@ -5755,14 +5911,13 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 	if (err)
 		goto ret;
 
-	if (!cfg.namespace_id) {
+	if (!argconfig_parse_seen(opts, "namespace-id")) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
 		if (err < 0) {
 			if (errno != ENOTTY) {
 				fprintf(stderr, "get-namespace-id: %s\n", nvme_strerror(errno));
 				goto close_dev;
 			}
-
 			cfg.namespace_id = NVME_NSID_ALL;
 		}
 	}
@@ -5773,7 +5928,7 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 		goto close_dev;
 	}
 
-	if (cfg.uuid_index > 128) {
+	if (cfg.uuid_index > 127) {
 		fprintf(stderr, "invalid uuid index param: %u\n", cfg.uuid_index);
 		err = -1;
 		goto close_dev;
@@ -6236,7 +6391,7 @@ static int invalid_tags(__u64 storage_tag, __u64 ref_tag, __u8 sts, __u8 pif)
 			result = 1;
 		break;
 	case 2:
-		if (sts > 0 && ref_tag >= (1LL << (64 - sts)))
+		if (sts > 0 && ref_tag >= (1LL << (48 - sts)))
 			result = 1;
 		break;
 	default:
@@ -7087,7 +7242,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 	int dfd, mfd;
 	int flags = opcode & 1 ? O_RDONLY : O_WRONLY | O_CREAT;
 	int mode = S_IRUSR | S_IWUSR |S_IRGRP | S_IWGRP| S_IROTH;
-	__u16 control = 0;
+	__u16 control = 0, nblocks = 0;
 	__u32 dsmgmt = 0;
 	int logical_block_size = 0;
 	unsigned long long buffer_size = 0, mbuffer_size = 0;
@@ -7277,9 +7432,14 @@ static int submit_io(int opcode, char *command, const char *desc,
 	if (cfg.data_size < buffer_size) {
 		fprintf(stderr, "Rounding data size to fit block count (%lld bytes)\n",
 				buffer_size);
-	} else {
+	} else
 		buffer_size = cfg.data_size;
-	}
+
+	/* Get the required block count. Note this is a zeroes based value. */
+	nblocks = ((buffer_size + (logical_block_size - 1)) / logical_block_size) - 1;
+
+	/* Update the data size based on the required block count */
+	buffer_size = (nblocks + 1) * logical_block_size;
 
 	buffer = nvme_alloc(buffer_size, &huge);
 	if (!buffer) {
@@ -7352,7 +7512,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		printf("nsid         : %02x\n", cfg.namespace_id);
 		printf("flags        : %02x\n", 0);
 		printf("control      : %04x\n", control);
-		printf("nblocks      : %04x\n", cfg.block_count);
+		printf("nblocks      : %04x\n", nblocks);
 		printf("metadata     : %"PRIx64"\n", (uint64_t)(uintptr_t)mbuffer);
 		printf("addr         : %"PRIx64"\n", (uint64_t)(uintptr_t)buffer);
 		printf("slba         : %"PRIx64"\n", (uint64_t)cfg.start_block);
@@ -7373,7 +7533,7 @@ static int submit_io(int opcode, char *command, const char *desc,
 		.fd		= dev_fd(dev),
 		.nsid		= cfg.namespace_id,
 		.slba		= cfg.start_block,
-		.nlb		= cfg.block_count,
+		.nlb		= nblocks,
 		.control	= control,
 		.dsm		= cfg.dsmgmt,
 		.sts		= sts,
@@ -8668,26 +8828,47 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		"to be used for the TLS key.";
 	const char *hmac = "HMAC function to use for the retained key "\
 		"(1 = SHA-256, 2 = SHA-384).";
+	const char *hostnqn = "Host NQN for the retained key.";
+	const char *subsysnqn = "Subsystem NQN for the retained key.";
+	const char *keyring = "Keyring for the retained key.";
+	const char *keytype = "Key type of the retained key.";
+	const char *insert = "Insert only, do not print the retained key.";
 
 	unsigned char *raw_secret;
 	char encoded_key[128];
 	int key_len = 32;
 	unsigned long crc = crc32(0L, NULL, 0);
-	int err = 0;
+	int err;
+	long tls_key;
 
 	struct config {
+		char		*keyring;
+		char		*keytype;
+		char		*hostnqn;
+		char		*subsysnqn;
 		char		*secret;
 		unsigned int	hmac;
+		bool		insert;
 	};
 
 	struct config cfg = {
+		.keyring	= ".nvme",
+		.keytype	= "psk",
+		.hostnqn	= NULL,
+		.subsysnqn	= NULL,
 		.secret		= NULL,
 		.hmac		= 1,
+		.insert		= false,
 	};
 
 	OPT_ARGS(opts) = {
+		OPT_STR("keyring",	'k', &cfg.keyring,	keyring),
+		OPT_STR("keytype",	't', &cfg.keytype,	keytype),
+		OPT_STR("hostnqn",	'n', &cfg.hostnqn,	hostnqn),
+		OPT_STR("subsysnqn",	'c', &cfg.subsysnqn,	subsysnqn),
 		OPT_STR("secret",	's', &cfg.secret,	secret),
 		OPT_UINT("hmac",	'm', &cfg.hmac,		hmac),
+		OPT_FLAG("insert",	'i', &cfg.insert,	insert),
 		OPT_END()
 	};
 
@@ -8698,7 +8879,10 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		fprintf(stderr, "Invalid HMAC identifier %u\n", cfg.hmac);
 		return -EINVAL;
 	}
-
+	if (cfg.insert && !cfg.subsysnqn) {
+		fprintf(stderr, "No subsystem NQN specified\n");
+		return -EINVAL;
+	}
 	if (cfg.hmac == 2)
 		key_len = 48;
 
@@ -8732,6 +8916,36 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		}
 	}
 
+	if (cfg.hostnqn && !cfg.subsysnqn) {
+		fprintf(stderr,
+			"Need to specify subsystem NQN to insert a TLS key\n");
+		return -EINVAL;
+	}
+	if (cfg.subsysnqn) {
+		if (!cfg.hostnqn) {
+			cfg.hostnqn = nvmf_hostnqn_from_file();
+			if (!cfg.hostnqn) {
+				fprintf(stderr,
+					"Failed to read host NQN\n");
+				return -EINVAL;
+			}
+		}
+
+		tls_key = nvme_insert_tls_key(cfg.keyring, cfg.keytype,
+				      cfg.hostnqn, cfg.subsysnqn, cfg.hmac,
+				      raw_secret, key_len);
+		if (tls_key < 0) {
+			fprintf(stderr,
+				"Failed to insert key, error %d\n", errno);
+			return -errno;
+		}
+
+		if (cfg.insert) {
+			printf("Inserted TLS key %08x\n",
+			       (unsigned int)tls_key);
+			return 0;
+		}
+	}
 	crc = crc32(crc, raw_secret, key_len);
 	raw_secret[key_len++] = crc & 0xff;
 	raw_secret[key_len++] = (crc >> 8) & 0xff;
@@ -8748,24 +8962,41 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 static int check_tls_key(int argc, char **argv, struct command *command, struct plugin *plugin)
 {
 	const char *desc = "Check a TLS key for NVMe PSK Interchange format.\n";
-	const char *key = "TLS key (in PSK Interchange format) "\
+	const char *keydata = "TLS key (in PSK Interchange format) "\
 		"to be validated.";
+	const char *hostnqn = "Host NQN for the retained key.";
+	const char *subsysnqn = "Subsystem NQN for the retained key.";
+	const char *keyring = "Keyring for the retained key.";
+	const char *keytype = "Key type of the retained key.";
 
 	unsigned char decoded_key[128];
 	unsigned int decoded_len;
 	u_int32_t crc = crc32(0L, NULL, 0);
 	u_int32_t key_crc;
 	int err = 0, hmac;
+	long tls_key;
 	struct config {
-		char	*key;
+		char	*keyring;
+		char	*keytype;
+		char	*hostnqn;
+		char	*subsysnqn;
+		char	*keydata;
 	};
 
 	struct config cfg = {
-		.key	= NULL,
+		.keyring	= ".nvme",
+		.keytype	= "psk",
+		.hostnqn	= NULL,
+		.subsysnqn	= NULL,
+		.keydata	= NULL,
 	};
 
 	OPT_ARGS(opts) = {
-		OPT_STR("key", 'k', &cfg.key, key),
+		OPT_STR("keyring",	'k', &cfg.keyring,	keyring),
+		OPT_STR("keytype",	't', &cfg.keytype,	keytype),
+		OPT_STR("hostnqn",	'n', &cfg.hostnqn,	hostnqn),
+		OPT_STR("subsysnqn",	'c', &cfg.subsysnqn,	subsysnqn),
+		OPT_STR("keydata",	'd', &cfg.keydata,	keydata),
 		OPT_END()
 	};
 
@@ -8773,27 +9004,27 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 	if (err)
 		return err;
 
-	if (!cfg.key) {
-		fprintf(stderr, "Key not specified\n");
+	if (!cfg.keydata) {
+		fprintf(stderr, "No key data\n");
 		return -EINVAL;
 	}
 
-	if (sscanf(cfg.key, "NVMeTLSkey-1:%02x:*s", &hmac) != 1) {
-		fprintf(stderr, "Invalid key header '%s'\n", cfg.key);
+	if (sscanf(cfg.keydata, "NVMeTLSkey-1:%02x:*s", &hmac) != 1) {
+		fprintf(stderr, "Invalid key '%s'\n", cfg.keydata);
 		return -EINVAL;
 	}
 	switch (hmac) {
 	case 1:
-		if (strlen(cfg.key) != 65) {
+		if (strlen(cfg.keydata) != 65) {
 			fprintf(stderr, "Invalid key length %zu for SHA(256)\n",
-				strlen(cfg.key));
+				strlen(cfg.keydata));
 			return -EINVAL;
 		}
 		break;
 	case 2:
-		if (strlen(cfg.key) != 89) {
+		if (strlen(cfg.keydata) != 89) {
 			fprintf(stderr, "Invalid key length %zu for SHA(384)\n",
-				strlen(cfg.key));
+				strlen(cfg.keydata));
 			return -EINVAL;
 		}
 		break;
@@ -8803,11 +9034,11 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 		break;
 	}
 
-	err = base64_decode(cfg.key + 16, strlen(cfg.key) - 17,
+	err = base64_decode(cfg.keydata + 16, strlen(cfg.keydata) - 17,
 			    decoded_key);
 	if (err < 0) {
 		fprintf(stderr, "Base64 decoding failed (%s, error %d)\n",
-			cfg.key + 16, err);
+			cfg.keydata + 16, err);
 		return err;
 	}
 	decoded_len = err;
@@ -8826,8 +9057,27 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 			key_crc, crc);
 		return -EINVAL;
 	}
-	printf("Key is valid (HMAC %d, length %d, CRC %08x)\n",
-	       hmac, decoded_len, crc);
+	if (cfg.subsysnqn) {
+		if (!cfg.hostnqn) {
+			cfg.hostnqn = nvmf_hostnqn_from_file();
+			if (!cfg.hostnqn) {
+				fprintf(stderr,
+					"Failed to read host NQN\n");
+				return -EINVAL;
+			}
+		}
+
+		tls_key = nvme_insert_tls_key(cfg.keyring, cfg.keytype,
+				      cfg.hostnqn, cfg.subsysnqn, hmac,
+				      decoded_key, decoded_len);
+		if (tls_key < 0) {
+			fprintf(stderr,
+				"Failed to insert key, error %d\n", errno);
+			return -errno;
+		}
+	} else
+		printf("Key is valid (HMAC %d, length %d, CRC %08x)\n",
+		       hmac, decoded_len, crc);
 	return 0;
 }
 
