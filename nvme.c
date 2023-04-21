@@ -9064,6 +9064,28 @@ static int nvme_mi(int argc, char **argv, __u8 admin_opcode, const char *desc)
 	return err;
 }
 
+static int show_nbft_compat_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
+{
+	char **argv_plugin;
+	int i, err;
+
+	argv_plugin = calloc(sizeof(char *), argc + 1);
+	if (!argv_plugin)
+		return -ENOMEM;
+
+	argv_plugin[0] = "nbft";
+	argv_plugin[1] = "show";
+
+	for (i = 1; i < argc; i++)
+		argv_plugin[1 + i] = argv[i];
+
+	err = handle_plugin(argc, argv_plugin, plugin);
+
+	free(argv_plugin);
+	return err;
+}
+
+
 static int nmi_recv(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
 	const char *desc =
