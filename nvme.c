@@ -67,7 +67,6 @@
 #include "util/argconfig.h"
 #include "util/suffix.h"
 #include "fabrics.h"
-#include "nbft.h"
 
 #define CREATE_CMD
 #include "nvme-builtin.h"
@@ -9191,18 +9190,6 @@ static int dim_cmd(int argc, char **argv, struct command *command, struct plugin
 {
 	const char *desc = "Send Discovery Information Management command to a Discovery Controller (DC)";
 	return nvmf_dim(desc, argc, argv);
-}
-
-int connect_nbft_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
-{
-	const char *desc = "Connect subsystems listed in ACPI NBFT tables";
-	return connect_nbft(desc, argc, argv);
-}
-
-int show_nbft_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
-{
-	const char *desc = "Show ACPI NBFT table conects";
-	return show_nbft(desc, argc, argv);
 }
 
 void register_extension(struct plugin *plugin)
