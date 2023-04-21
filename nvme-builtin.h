@@ -109,6 +109,8 @@ COMMAND_LIST(
 	ENTRY("show-topology", "Show the topology", show_topology_cmd) \
 	ENTRY("io-mgmt-recv", "I/O Management Receive", io_mgmt_recv)
 	ENTRY("io-mgmt-send", "I/O Management Send", io_mgmt_send)
+	ENTRY("connect-nbft", "Connect subsystems listed in ACPI NBFT tables", connect_nbft_compat_cmd)
+	ENTRY("show-nbft", "Show ACPI NBFT table contents", show_nbft_compat_cmd)
 );
 
 #endif

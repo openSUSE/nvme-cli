@@ -9152,13 +9152,13 @@ static int show_topology_cmd(int argc, char **argv, struct command *command, str
 static int discover_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
 {
 	const char *desc = "Send Get Log Page request to Discovery Controller.";
-	return nvmf_discover(desc, argc, argv, false);
+	return nvmf_discover(desc, argc, argv, false, false);
 }
 
 static int connect_all_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
 {
 	const char *desc = "Discover NVMeoF subsystems and connect to them";
-	return nvmf_discover(desc, argc, argv, true);
+	return nvmf_discover(desc, argc, argv, true, false);
 }
 
 static int connect_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
@@ -9190,6 +9190,35 @@ static int dim_cmd(int argc, char **argv, struct command *command, struct plugin
 {
 	const char *desc = "Send Discovery Information Management command to a Discovery Controller (DC)";
 	return nvmf_dim(desc, argc, argv);
+}
+
+static int connect_nbft_compat_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
+{
+	const char *desc = "Connect subsystems listed in ACPI NBFT tables";
+
+	return nvmf_discover(desc, argc, argv, true, true);
+}
+
+static int show_nbft_compat_cmd(int argc, char **argv, struct command *command, struct plugin *plugin)
+{
+	char **argv_plugin;
+	int i, err;
+
+	argv_plugin = calloc(sizeof(char *), argc + 1);
+	if (!argv_plugin)
+		return -ENOMEM;
+
+	argv_plugin[0] = "nbft";
+	argv_plugin[1] = "show";
+
+	for (i = 1; i < argc; i++)
+		argv_plugin[1 + i] = argv[i];
+
+	err = handle_plugin(argc, argv_plugin, plugin);
+
+	free(argv_plugin);
+
+	return err;
 }
 
 void register_extension(struct plugin *plugin)

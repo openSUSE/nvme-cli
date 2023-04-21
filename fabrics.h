@@ -12,7 +12,8 @@ struct tr_config {
 };
 
 extern nvme_ctrl_t lookup_ctrl(nvme_root_t r, struct tr_config *trcfg);
-extern int nvmf_discover(const char *desc, int argc, char **argv, bool connect);
+extern int nvmf_discover(const char *desc, int argc, char **argv, bool connect,
+			 bool nbft_compat_mode);
 extern int nvmf_connect(const char *desc, int argc, char **argv);
 extern int nvmf_disconnect(const char *desc, int argc, char **argv);
 extern int nvmf_disconnect_all(const char *desc, int argc, char **argv);

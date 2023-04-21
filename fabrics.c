@@ -689,7 +689,8 @@ static int discover_from_json_config_file(nvme_root_t r, nvme_host_t h,
 	return ret;
 }
 
-int nvmf_discover(const char *desc, int argc, char **argv, bool connect)
+int nvmf_discover(const char *desc, int argc, char **argv, bool connect,
+		  bool nbft_compat_mode)
 {
 	char *subsysnqn = NVME_DISC_SUBSYS_NAME;
 	char *hostnqn = NULL, *hostid = NULL, *hostkey = NULL;
@@ -710,6 +711,11 @@ int nvmf_discover(const char *desc, int argc, char **argv, bool connect)
 	bool json_config = false;
 	bool nbft = false, nonbft = false;
 	char *nbft_path = NBFT_SYSFS_PATH;
+
+	if (nbft_compat_mode)
+		nbft = true;
+	else
+		nonbft = true;
 
 	OPT_ARGS(opts) = {
 		OPT_STRING("device",   'd', "DEV", &device, "use existing discovery controller device"),
