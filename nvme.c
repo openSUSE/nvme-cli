@@ -9079,7 +9079,7 @@ static int show_nbft_compat_cmd(int argc, char **argv, struct command *command, 
 	for (i = 1; i < argc; i++)
 		argv_plugin[1 + i] = argv[i];
 
-	err = handle_plugin(argc, argv_plugin, plugin);
+	err = handle_plugin(argc + 1, argv_plugin, plugin);
 
 	free(argv_plugin);
 	return err;
