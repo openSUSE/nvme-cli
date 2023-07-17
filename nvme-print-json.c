@@ -2358,6 +2358,7 @@ void json_nvme_id_uuid_list(const struct nvme_id_uuid_list *uuid_list)
 		struct json_object *entry = json_create_object();
 
 		/* The list is terminated by a zero UUID value */
+	/* The 0th entry is reserved */
 		if (memcmp(uuid_list->entry[i].uuid, zero_uuid, sizeof(zero_uuid)) == 0)
 			break;
 		memcpy(&uuid, uuid_list->entry[i].uuid, sizeof(uuid));
