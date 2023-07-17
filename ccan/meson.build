@@ -1,7 +1,12 @@
 sources += files([
+    'ccan/hash/hash.c',
+    'ccan/htable/htable.c',
+    'ccan/ilog/ilog.c',
+    'ccan/likely/likely.c',
     'ccan/list/list.c',
     'ccan/str/debug.c',
     'ccan/str/str.c',
+    'ccan/strset/strset.c',
 ])
 
 if get_option('buildtype') == 'debug'
