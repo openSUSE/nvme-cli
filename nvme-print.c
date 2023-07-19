@@ -3663,7 +3663,6 @@ void nvme_show_id_uuid_list(const struct nvme_id_uuid_list *uuid_list,
 	if (flags & JSON)
 		return json_nvme_id_uuid_list(uuid_list);
 
-	/* The 0th entry is reserved */
 	printf("NVME Identify UUID:\n");
 	for (i = 0; i < NVME_ID_UUID_LIST_MAX; i++) {
 		__u8 uuid[NVME_UUID_LEN];
