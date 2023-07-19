@@ -5571,8 +5571,7 @@ static void json_nvme_id_uuid_list(const struct nvme_id_uuid_list *uuid_list)
 
 	root = json_create_object();
 	entries = json_create_array();
-	/* The 0th entry is reserved */
-	for (i = 1; i < NVME_ID_UUID_LIST_MAX; i++) {
+	for (i = 0; i < NVME_ID_UUID_LIST_MAX; i++) {
 		uuid_t uuid;
 		struct json_object *entry = json_create_object();
 
@@ -5602,9 +5601,8 @@ void nvme_show_id_uuid_list(const struct nvme_id_uuid_list *uuid_list,
 	if (flags & JSON)
 		return json_nvme_id_uuid_list(uuid_list);
 
-	/* The 0th entry is reserved */
 	printf("NVME Identify UUID:\n");
-	for (i = 1; i < NVME_ID_UUID_LIST_MAX; i++) {
+	for (i = 0; i < NVME_ID_UUID_LIST_MAX; i++) {
 		uuid_t uuid;
 		char *association = "";
 		uint8_t identifier_association = uuid_list->entry[i].header & 0x3;
