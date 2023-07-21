@@ -5451,6 +5451,7 @@ static bool nvme_show_detailed_ns(const char *name, void *arg)
 	struct htable_ns_iter it;
 	struct strset ctrls;
 	nvme_ctrl_t c;
+	nvme_path_t p;
 	nvme_ns_t n;
 	bool first;
 
@@ -5470,8 +5471,10 @@ static bool nvme_show_detailed_ns(const char *name, void *arg)
 			return true;
 		}
 
-		nvme_subsystem_for_each_ctrl(nvme_ns_get_subsystem(n), c)
+		nvme_namespace_for_each_path(n, p) {
+			c = nvme_path_get_ctrl(p);
 			strset_add(&ctrls, nvme_ctrl_get_name(c));
+		}
 	}
 
 	first = true;
