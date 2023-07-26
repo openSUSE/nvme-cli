@@ -1225,6 +1225,8 @@ static void nvme_show_subsystem(nvme_root_t r, bool show_ana)
 			       nvme_subsystem_get_nqn(s));
 			printf("%*s   hostnqn=%s\n", len, " ",
 			       nvme_host_get_hostnqn(nvme_subsystem_get_host(s)));
+			printf("%*s   iopolicy=%s\n", len, " ",
+			       nvme_subsystem_get_iopolicy(s));
 			printf("\\\n");
 
 			if (!nvme_show_subsystem_multipath(s, show_ana))
@@ -5638,6 +5640,8 @@ static void nvme_show_simple_topology(nvme_root_t r,
 			       nvme_subsystem_get_nqn(s));
 			printf("%*s   hostnqn=%s\n", len, " ",
 			       nvme_host_get_hostnqn(nvme_subsystem_get_host(s)));
+			printf("%*s   iopolicy=%s\n", len, " ",
+			       nvme_subsystem_get_iopolicy(s));
 			printf("\\\n");
 
 			if (nvme_is_multipath(s))
