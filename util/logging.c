@@ -4,6 +4,8 @@
 
 #include "logging.h"
 
+int log_level;
+
 int map_log_level(int verbose, bool quiet)
 {
 	int log_level;
