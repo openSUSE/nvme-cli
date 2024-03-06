@@ -373,8 +373,8 @@ int parse_and_open(struct nvme_dev **dev, int argc, char **argv,
 	ret = get_dev(dev, argc, argv, O_RDONLY);
 	if (ret < 0)
 		argconfig_print_help(desc, opts);
-	else if (argconfig_parse_seen(opts, "verbose"))
-		nvme_cli_set_debug(*dev, true);
+	else
+		log_level = map_log_level(verbose_level, false);
 
 	return ret;
 }
@@ -3222,7 +3222,6 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 	if (argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
-	log_level = map_log_level(verbose_level, false);
 
 	r = nvme_create_root(stderr, log_level);
 	if (!r) {
@@ -3275,8 +3274,6 @@ static int list(int argc, char **argv, struct command *cmd, struct plugin *plugi
 
 	if (argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
-
-	log_level = map_log_level(verbose_level, false);
 
 	r = nvme_create_root(stderr, log_level);
 	if (!r) {
@@ -8959,8 +8956,6 @@ static int show_topology_cmd(int argc, char **argv, struct command *command, str
 		nvme_show_error("Invalid ranking argument: %s", cfg.ranking);
 		return -EINVAL;
 	}
-
-	log_level = map_log_level(verbose_level, false);
 
 	r = nvme_create_root(stderr, log_level);
 	if (!r) {
