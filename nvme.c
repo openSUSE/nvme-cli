@@ -3196,7 +3196,7 @@ static bool nvme_match_device_filter(nvme_subsystem_t s,
 static int list_subsys(int argc, char **argv, struct command *cmd,
 		struct plugin *plugin)
 {
-	nvme_root_t r = NULL;
+	_cleanup_nvme_root_ nvme_root_t r = NULL;
 	enum nvme_print_flags flags;
 	const char *desc = "Retrieve information for subsystems";
 	nvme_scan_filter_t filter = NULL;
@@ -3208,7 +3208,7 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 
 	err = argconfig_parse(argc, argv, desc, opts);
 	if (err < 0)
-		goto ret;
+		return err;
 
 	devname = NULL;
 	if (optind < argc)
@@ -3231,8 +3231,7 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 			nvme_show_error("Failed to scan nvme subsystem for %s", devname);
 		else
 			nvme_show_error("Failed to scan nvme subsystem");
-		err = -errno;
-		goto ret;
+		return -errno;
 	}
 
 	if (devname) {
@@ -3240,8 +3239,7 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 
 		if (sscanf(devname, "nvme%dn%d", &subsys_num, &nsid) != 2) {
 			nvme_show_error("Invalid device name %s", devname);
-			err = -EINVAL;
-			goto ret;
+			return -EINVAL;
 		}
 		filter = nvme_match_device_filter;
 	}
@@ -3249,22 +3247,19 @@ static int list_subsys(int argc, char **argv, struct command *cmd,
 	err = nvme_scan_topology(r, filter, (void *)devname);
 	if (err) {
 		nvme_show_error("Failed to scan topology: %s", nvme_strerror(errno));
-		goto ret;
+		return -errno;
 	}
 
 	nvme_show_subsystem_list(r, nsid != NVME_NSID_ALL, flags);
 
-ret:
-	if (r)
-		nvme_free_tree(r);
-	return err;
+	return 0;
 }
 
 static int list(int argc, char **argv, struct command *cmd, struct plugin *plugin)
 {
 	const char *desc = "Retrieve basic information for all NVMe namespaces";
 	enum nvme_print_flags flags;
-	nvme_root_t r;
+	_cleanup_nvme_root_ nvme_root_t r = NULL;
 	int err = 0;
 
 	NVME_ARGS(opts);
@@ -3292,12 +3287,10 @@ static int list(int argc, char **argv, struct command *cmd, struct plugin *plugi
 	err = nvme_scan_topology(r, NULL, NULL);
 	if (err < 0) {
 		nvme_show_error("Failed to scan topology: %s", nvme_strerror(errno));
-		nvme_free_tree(r);
 		return err;
 	}
 
 	nvme_show_list_items(r, flags);
-	nvme_free_tree(r);
 
 	return err;
 }
@@ -8902,7 +8895,7 @@ static int show_topology_cmd(int argc, char **argv, struct command *command, str
 	const char *desc = "Show the topology\n";
 	const char *ranking = "Ranking order: namespace|ctrl";
 	enum nvme_print_flags flags;
-	nvme_root_t r;
+	_cleanup_nvme_root_ nvme_root_t r = NULL;
 	enum nvme_cli_topo_ranking rank;
 	int err;
 
@@ -8955,7 +8948,6 @@ static int show_topology_cmd(int argc, char **argv, struct command *command, str
 	}
 
 	nvme_show_topology(r, rank, flags);
-	nvme_free_tree(r);
 
 	return err;
 }
