@@ -173,7 +173,7 @@ nvme_list_opts () {
 			--output-format= -o"
 			;;
 		"pred-lat-event-agg-log")
-		opts+=" --log-entries= -e  --rae -r \
+		opts+=" --log-entries= -e --rae -r \
 			--raw-binary -b --output-format= -o"
 			;;
 		"persistent-event-log")
@@ -181,7 +181,7 @@ nvme_list_opts () {
 			--raw-binary -b --output-format= -o"
 			;;
 		"endurance-event-agg-log")
-		opts+=" --log-entries= -e  --rae -r \
+		opts+=" --log-entries= -e --rae -r \
 			--raw-binary -b --output-format= -o"
 			;;
 		"lba-status-log")
@@ -473,7 +473,7 @@ nvme_list_opts () {
 }
 
 plugin_intel_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -529,7 +529,7 @@ plugin_intel_opts () {
 }
 
 plugin_amzn_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -561,7 +561,7 @@ plugin_amzn_opts () {
 }
 
 plugin_memblaze_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -616,7 +616,7 @@ plugin_memblaze_opts () {
 }
 
 plugin_wdc_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -728,7 +728,7 @@ plugin_wdc_opts () {
 }
 
 plugin_huawei_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -763,7 +763,7 @@ plugin_huawei_opts () {
 }
 
 plugin_toshiba_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -800,7 +800,7 @@ plugin_toshiba_opts () {
 }
 
 plugin_micron_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -876,7 +876,7 @@ plugin_micron_opts () {
 }
 
 plugin_seagate_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -931,7 +931,7 @@ plugin_seagate_opts () {
 }
 
 plugin_virtium_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -965,7 +965,7 @@ plugin_virtium_opts () {
 }
 
 plugin_shannon_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1008,7 +1008,7 @@ plugin_shannon_opts () {
 }
 
 plugin_dera_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1039,7 +1039,7 @@ plugin_dera_opts () {
 }
 
 plugin_sfx_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1088,7 +1088,7 @@ plugin_sfx_opts () {
 }
 
 plugin_solidigm_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1171,7 +1171,7 @@ plugin_solidigm_opts () {
 }
 
 plugin_transcend_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1205,7 +1205,7 @@ plugin_transcend_opts () {
 }
 
 plugin_zns_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1267,7 +1267,7 @@ plugin_zns_opts () {
 			;;
 		"set-zone-desc")
 		opts+=" --namespace-id= -n --start-lba= -s \
-			--data= -d --timeout= -t  --zrwa -r"
+			--data= -d --timeout= -t --zrwa -r"
 			;;
 		"flush-zone")
 		opts+=" --namespace-id= -n --last-lba= -l --timeout= -t"
@@ -1293,7 +1293,7 @@ plugin_zns_opts () {
 }
 
 plugin_nvidia_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1325,7 +1325,7 @@ plugin_nvidia_opts () {
 }
 
 plugin_ymtc_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1356,7 +1356,7 @@ plugin_ymtc_opts () {
 }
 
 plugin_inspur_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1387,7 +1387,7 @@ plugin_inspur_opts () {
 }
 
 plugin_ocp_opts () {
-    local opts=""
+	local opts=""
 	local compargs=""
 
 	local nonopt_args=0
@@ -1500,7 +1500,7 @@ _nvme_subcmds () {
 		[dera]="smart-log-add"
 		[sfx]="smart-log-add lat-stats get-bad-block query-cap \
 			change-cap set-feature get-feature"
-    		[solidigm]="id-ctrl vs-smart-add-log garbage-collect-log \
+		[solidigm]="id-ctrl vs-smart-add-log garbage-collect-log \
 			vs-internal-log latency-tracking-log \
 			clear-pcie-correctable-errors parse-telemetry-log \
 			clear-fw-activate-history vs-fw-activate-history log-page-directory \
@@ -1536,7 +1536,7 @@ _nvme_subcmds () {
 		[shannon]="plugin_shannon_opts"
 		[dera]="plugin_dera_opts"
 		[sfx]="plugin_sfx_opts"
-    		[solidigm]="plugin_solidigm_opts"
+		[solidigm]="plugin_solidigm_opts"
 		[transcend]="plugin_transcend_opts"
 		[zns]="plugin_zns_opts"
 		[nvidia]="plugin_nvidia_opts"
