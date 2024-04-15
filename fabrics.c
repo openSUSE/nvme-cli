@@ -638,7 +638,8 @@ char *nvmf_hostid_from_hostnqn(const char *hostnqn)
 
 void nvmf_check_hostid_and_hostnqn(const char *hostid, const char *hostnqn, unsigned int verbose)
 {
-	char *hostid_from_file, *hostid_from_hostnqn;
+	_cleanup_free_ char *hostid_from_file = NULL;
+	_cleanup_free_ char *hostid_from_hostnqn = NULL;
 
 	if (!hostid)
 		return;
@@ -648,7 +649,6 @@ void nvmf_check_hostid_and_hostnqn(const char *hostid, const char *hostnqn, unsi
 		if (verbose)
 			fprintf(stderr,
 				"warning: use generated hostid instead of hostid file\n");
-		free(hostid_from_file);
 	}
 
 	if (!hostnqn)
@@ -659,7 +659,6 @@ void nvmf_check_hostid_and_hostnqn(const char *hostid, const char *hostnqn, unsi
 		if (verbose)
 			fprintf(stderr,
 				"warning: use hostid which does not match uuid in hostnqn\n");
-		free(hostid_from_hostnqn);
 	}
 }
 
