@@ -8343,6 +8343,7 @@ static int gen_dhchap_key(int argc, char **argv, struct command *command, struct
 	const char *nqn = "Host NQN to use for key transformation.";
 
 	_cleanup_free_ unsigned char *raw_secret = NULL;
+	_cleanup_free_ char *hnqn = NULL;
 	unsigned char key[68];
 	char encoded_key[128];
 	unsigned long crc = crc32(0L, NULL, 0);
@@ -8437,7 +8438,7 @@ static int gen_dhchap_key(int argc, char **argv, struct command *command, struct
 	}
 
 	if (!cfg.nqn) {
-		cfg.nqn = nvmf_hostnqn_from_file();
+		cfg.nqn = hnqn = nvmf_hostnqn_from_file();
 		if (!cfg.nqn) {
 			nvme_show_error("Could not read host NQN");
 			return -ENOENT;
@@ -8564,6 +8565,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 
 	_cleanup_free_ unsigned char *raw_secret = NULL;
 	_cleanup_free_ char *encoded_key = NULL;
+	_cleanup_free_ char *hnqn = NULL;
 	int key_len = 32;
 	int err;
 	long tls_key;
@@ -8618,7 +8620,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 			return -EINVAL;
 		}
 		if (!cfg.hostnqn) {
-			cfg.hostnqn = nvmf_hostnqn_from_file();
+			cfg.hostnqn = hnqn = nvmf_hostnqn_from_file();
 			if (!cfg.hostnqn) {
 				nvme_show_error("Failed to read host NQN");
 				return -EINVAL;
@@ -8685,6 +8687,7 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 	const char *insert = "Insert retained key into the keyring.";
 
 	_cleanup_free_ unsigned char *decoded_key = NULL;
+	_cleanup_free_ char *hnqn = NULL;
 	int decoded_len, err = 0;
 	unsigned int hmac;
 	long tls_key;
@@ -8739,7 +8742,7 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 
 	if (cfg.subsysnqn) {
 		if (!cfg.hostnqn) {
-			cfg.hostnqn = nvmf_hostnqn_from_file();
+			cfg.hostnqn = hnqn = nvmf_hostnqn_from_file();
 			if (!cfg.hostnqn) {
 				nvme_show_error("Failed to read host NQN");
 				return -EINVAL;
