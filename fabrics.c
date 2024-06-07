@@ -750,6 +750,7 @@ int nvmf_discover(const char *desc, int argc, char **argv, bool connect)
 	if (!nvme_read_volatile_config(r))
 		json_config = true;
 
+	nvme_root_skip_namespaces(r);
 	ret = nvme_scan_topology(r, NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to scan topology: %s\n",
@@ -1048,6 +1049,7 @@ do_connect:
 	nvme_read_config(r, config_file);
 	nvme_read_volatile_config(r);
 
+	nvme_root_skip_namespaces(r);
 	ret = nvme_scan_topology(r, NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to scan topology: %s\n",
@@ -1203,6 +1205,7 @@ int nvmf_disconnect(const char *desc, int argc, char **argv)
 			nvme_strerror(errno));
 		return -errno;
 	}
+	nvme_root_skip_namespaces(r);
 	ret = nvme_scan_topology(r, NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to scan topology: %s\n",
@@ -1273,6 +1276,7 @@ int nvmf_disconnect_all(const char *desc, int argc, char **argv)
 			nvme_strerror(errno));
 		return -errno;
 	}
+	nvme_root_skip_namespaces(r);
 	ret = nvme_scan_topology(r, NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to scan topology: %s\n",
@@ -1348,6 +1352,7 @@ int nvmf_config(const char *desc, int argc, char **argv)
 	nvme_read_config(r, config_file);
 
 	if (scan_tree) {
+		nvme_root_skip_namespaces(r);
 		ret = nvme_scan_topology(r, NULL, NULL);
 		if (ret < 0) {
 			fprintf(stderr, "Failed to scan topology: %s\n",
@@ -1502,6 +1507,7 @@ int nvmf_dim(const char *desc, int argc, char **argv)
 			nvme_strerror(errno));
 		return -errno;
 	}
+	nvme_root_skip_namespaces(r);
 	ret = nvme_scan_topology(r, NULL, NULL);
 	if (ret < 0) {
 		fprintf(stderr, "Failed to scan topology: %s\n",
