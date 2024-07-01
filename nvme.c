@@ -8836,9 +8836,10 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 	const char *keyfile = "File for list of keys.";
 	const char *import = "Import all keys into the keyring.";
 	const char *export = "Export all keys from the keyring.";
+	const char *revoke = "Revoke key from the keyring.";
 
 	_cleanup_file_ FILE *fd = NULL;
-	int err = 0;
+	int cnt, err = 0;
 
 	struct config {
 		char		*keyring;
@@ -8846,6 +8847,7 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 		char		*keyfile;
 		bool		import;
 		bool		export;
+		char		*revoke;
 	};
 
 	struct config cfg = {
@@ -8854,6 +8856,7 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 		.keyfile	= NULL,
 		.import		= false,
 		.export		= false,
+		.revoke		= NULL,
 	};
 
 	NVME_ARGS(opts,
@@ -8861,7 +8864,8 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 		  OPT_STR("keytype",	't', &cfg.keytype,	keytype),
 		  OPT_STR("keyfile",	'f', &cfg.keyfile,	keyfile),
 		  OPT_FLAG("import",	'i', &cfg.import,	import),
-		  OPT_FLAG("export",	'e', &cfg.export,	export));
+		  OPT_FLAG("export",	'e', &cfg.export,	export),
+		  OPT_STR("revoke",	'r', &cfg.revoke,	revoke));
 
 	err = argconfig_parse(argc, argv, desc, opts);
 	if (err)
@@ -8888,8 +8892,13 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 			fd = freopen(NULL, "w", stdout);
 	}
 
-	if (cfg.export && cfg.import) {
-		nvme_show_error("Cannot specify both --import and --export");
+	cnt = 0;
+	if (cfg.export) cnt++;
+	if (cfg.import) cnt++;
+	if (cfg.revoke) cnt++;
+
+	if (cnt != 1) {
+		nvme_show_error("Must specify either --import, --export or --revoke");
 		return -EINVAL;
 	} else if (cfg.export) {
 		err = nvme_scan_tls_keys(cfg.keyring, __scan_tls_key, fd);
@@ -8899,8 +8908,10 @@ static int tls_key(int argc, char **argv, struct command *command, struct plugin
 	} else if (cfg.import) {
 		err = import_key(cfg.keyring, fd);
 	} else {
-		nvme_show_error("Must specify either --import or --export");
-		err = -EINVAL;
+		err = nvme_revoke_tls_key(cfg.keyring, cfg.keytype, cfg.revoke);
+		if (err)
+			nvme_show_error("Failed to revoke key '%s'",
+					nvme_strerror(errno));
 	}
 
 	return err;
