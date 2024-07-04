@@ -23,18 +23,18 @@ DECLARE_CLEANUP_FUNC(name, type)		\
 
 static inline void freep(void *p)
 {
-        free(*(void**) p);
+	free(*(void **)p);
 }
 #define _cleanup_free_ __cleanup__(freep)
 
 #define _cleanup_huge_ __cleanup__(nvme_free_huge)
 
-static inline void close_file(int *f)
+static inline void cleanup_fd(int *fd)
 {
-	if (*f > STDERR_FILENO)
-		close(*f);
+	if (*fd > STDERR_FILENO)
+		close(*fd);
 }
-#define _cleanup_file_ __cleanup__(close_file)
+#define _cleanup_fd_ __cleanup__(cleanup_fd)
 
 static inline void cleanup_nvme_root(nvme_root_t *r)
 {
@@ -43,4 +43,7 @@ static inline void cleanup_nvme_root(nvme_root_t *r)
 }
 #define _cleanup_nvme_root_ __cleanup__(cleanup_nvme_root)
 
-#endif
+static inline DEFINE_CLEANUP_FUNC(cleanup_file, FILE *, fclose)
+#define _cleanup_file_ __cleanup__(cleanup_file)
+
+#endif /* __CLEANUP_H */

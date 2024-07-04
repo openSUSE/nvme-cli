@@ -439,7 +439,7 @@ static int dump_telemetry(struct nvme_dev *dev, struct config cfg, enum telemetr
 	char *log_descr;
 	struct stat sb;
 
-	_cleanup_file_ int output = -1;
+	_cleanup_fd_ int output = -1;
 
 	switch (ttype) {
 	case HOSTGENNEW:
