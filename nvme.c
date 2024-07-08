@@ -477,7 +477,7 @@ static int get_smart_log(int argc, char **argv, struct command *cmd, struct plug
 	if (cfg.raw_binary)
 		flags = BINARY;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	smart_log = nvme_alloc(sizeof(*smart_log));
@@ -974,7 +974,7 @@ static int get_effects_log(int argc, char **argv, struct command *cmd, struct pl
 	if (cfg.raw_binary)
 		flags = BINARY;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	list_head_init(&log_pages);
@@ -2316,7 +2316,7 @@ static int sanitize_log(int argc, char **argv, struct command *command, struct p
 	if (cfg.raw_binary)
 		flags = BINARY;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	sanitize_log = nvme_alloc(sizeof(*sanitize_log));
@@ -2365,7 +2365,7 @@ static int get_fid_support_effects_log(int argc, char **argv, struct command *cm
 		return err;
 	}
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	fid_support_log = nvme_alloc(sizeof(*fid_support_log));
@@ -2414,7 +2414,7 @@ static int get_mi_cmd_support_effects_log(int argc, char **argv, struct command 
 		return err;
 	}
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	mi_cmd_support_log = nvme_alloc(sizeof(*mi_cmd_support_log));
@@ -3339,7 +3339,7 @@ int __id_ctrl(int argc, char **argv, struct command *cmd, struct plugin *plugin,
 	if (cfg.vendor_specific)
 		flags |= VS;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	ctrl = nvme_alloc(sizeof(*ctrl));
@@ -3659,7 +3659,7 @@ static int id_ns(int argc, char **argv, struct command *cmd, struct plugin *plug
 	if (cfg.vendor_specific)
 		flags |= VS;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	if (!cfg.namespace_id) {
@@ -3731,7 +3731,7 @@ static int cmd_set_independent_id_ns(int argc, char **argv, struct command *cmd,
 	if (cfg.raw_binary)
 		flags = BINARY;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	if (!cfg.namespace_id) {
@@ -3885,7 +3885,7 @@ static int id_uuid(int argc, char **argv, struct command *cmd, struct plugin *pl
 	if (cfg.raw_binary)
 		flags = BINARY;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	uuid_list = nvme_alloc(sizeof(*uuid_list));
@@ -4125,7 +4125,7 @@ static int primary_ctrl_caps(int argc, char **argv, struct command *cmd, struct 
 		return err;
 	}
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	caps = nvme_alloc(sizeof(*caps));
@@ -5320,7 +5320,7 @@ static int show_registers(int argc, char **argv, struct command *cmd, struct plu
 		goto free_tree;
 	}
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 
 	bar = mmap_registers(r, dev);
@@ -7855,7 +7855,7 @@ static int dir_receive(int argc, char **argv, struct command *cmd, struct plugin
 	if (err)
 		return err;
 
-	if (cfg.human_readable)
+	if (cfg.human_readable || argconfig_parse_seen(opts, "verbose"))
 		flags |= VERBOSE;
 	if (cfg.raw_binary)
 		flags = BINARY;
