@@ -1078,7 +1078,7 @@ static int get_error_log(int argc, char **argv, struct command *cmd, struct plug
 
 	_cleanup_free_ struct nvme_error_log_page *err_log = NULL;
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
-	struct nvme_id_ctrl ctrl;
+	struct nvme_id_ctrl ctrl = { 0 };
 	enum nvme_print_flags flags;
 	int err = -1;
 
