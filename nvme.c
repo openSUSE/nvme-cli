@@ -8565,8 +8565,8 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		char		*hostnqn;
 		char		*subsysnqn;
 		char		*secret;
-		unsigned int	hmac;
-		unsigned int	identity;
+		unsigned char	hmac;
+		unsigned char	identity;
 		bool		insert;
 	};
 
@@ -8587,8 +8587,8 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		  OPT_STR("hostnqn",	'n', &cfg.hostnqn,	hostnqn),
 		  OPT_STR("subsysnqn",	'c', &cfg.subsysnqn,	subsysnqn),
 		  OPT_STR("secret",	's', &cfg.secret,	secret),
-		  OPT_UINT("hmac",	'm', &cfg.hmac,		hmac),
-		  OPT_UINT("identity",	'I', &cfg.identity,	identity),
+		  OPT_BYTE("hmac",	'm', &cfg.hmac,		hmac),
+		  OPT_BYTE("identity",	'I', &cfg.identity,	identity),
 		  OPT_FLAG("insert",	'i', &cfg.insert,	insert));
 
 	err = argconfig_parse(argc, argv, desc, opts);
@@ -8686,7 +8686,7 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 		char		*hostnqn;
 		char		*subsysnqn;
 		char		*keydata;
-		unsigned int	identity;
+		unsigned char	identity;
 		bool		insert;
 	};
 
@@ -8706,7 +8706,7 @@ static int check_tls_key(int argc, char **argv, struct command *command, struct 
 		  OPT_STR("hostnqn",	'n', &cfg.hostnqn,	hostnqn),
 		  OPT_STR("subsysnqn",	'c', &cfg.subsysnqn,	subsysnqn),
 		  OPT_STR("keydata",	'd', &cfg.keydata,	keydata),
-		  OPT_UINT("identity",	'I', &cfg.identity,	identity),
+		  OPT_BYTE("identity",	'I', &cfg.identity,	identity),
 		  OPT_FLAG("insert",	'i', &cfg.insert,	insert));
 
 	err = argconfig_parse(argc, argv, desc, opts);
