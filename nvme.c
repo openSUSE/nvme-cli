@@ -8545,7 +8545,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 	const char *secret =
 	    "Optional secret (in hexadecimal characters) to be used for the TLS key.";
 	const char *hmac = "HMAC function to use for the retained key (1 = SHA-256, 2 = SHA-384).";
-	const char *identity = "TLS identity version to use (0 = NVMe TCP 1.0c, 1 = NVMe TCP 2.0";
+	const char *version = "TLS identity version to use (0 = NVMe TCP 1.0c, 1 = NVMe TCP 2.0";
 	const char *hostnqn = "Host NQN for the retained key.";
 	const char *subsysnqn = "Subsystem NQN for the retained key.";
 	const char *keyring = "Keyring for the retained key.";
@@ -8566,7 +8566,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		char		*subsysnqn;
 		char		*secret;
 		unsigned char	hmac;
-		unsigned char	identity;
+		unsigned char	version;
 		bool		insert;
 	};
 
@@ -8577,7 +8577,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		.subsysnqn	= NULL,
 		.secret		= NULL,
 		.hmac		= 1,
-		.identity	= 0,
+		.version	= 0,
 		.insert		= false,
 	};
 
@@ -8588,7 +8588,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		  OPT_STR("subsysnqn",	'c', &cfg.subsysnqn,	subsysnqn),
 		  OPT_STR("secret",	's', &cfg.secret,	secret),
 		  OPT_BYTE("hmac",	'm', &cfg.hmac,		hmac),
-		  OPT_BYTE("identity",	'I', &cfg.identity,	identity),
+		  OPT_BYTE("identity",	'I', &cfg.version,	version),
 		  OPT_FLAG("insert",	'i', &cfg.insert,	insert));
 
 	err = argconfig_parse(argc, argv, desc, opts);
@@ -8598,9 +8598,9 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 		nvme_show_error("Invalid HMAC identifier %u", cfg.hmac);
 		return -EINVAL;
 	}
-	if (cfg.identity > 1) {
+	if (cfg.version > 1) {
 		nvme_show_error("Invalid TLS identity version %u",
-				cfg.identity);
+				cfg.version);
 		return -EINVAL;
 	}
 	if (cfg.insert) {
@@ -8652,7 +8652,7 @@ static int gen_tls_key(int argc, char **argv, struct command *command, struct pl
 	if (cfg.insert) {
 		tls_key = nvme_insert_tls_key_versioned(cfg.keyring,
 					cfg.keytype, cfg.hostnqn,
-					cfg.subsysnqn, cfg.identity,
+					cfg.subsysnqn, cfg.version,
 					cfg.hmac, raw_secret, key_len);
 		if (tls_key <= 0) {
 			nvme_show_error("Failed to insert key, error %d", errno);
