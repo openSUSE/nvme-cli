@@ -815,7 +815,7 @@ static int netapp_smdevices(int argc, char **argv, struct command *command,
 
 	num = scandir(dev_path, &devices, netapp_nvme_filter, alphasort);
 	if (num <= 0) {
-		fprintf(stderr, "No NVMe devices detected.\n");
+		fprintf(stderr, "No NVMe devices detected\n");
 		return num;
 	}
 
@@ -833,7 +833,7 @@ static int netapp_smdevices(int argc, char **argv, struct command *command,
 
 	smdevices = calloc(num, sizeof(*smdevices));
 	if (!smdevices) {
-		fprintf(stderr, "Unable to allocate memory for devices.\n");
+		fprintf(stderr, "Unable to allocate memory for devices\n");
 		return -ENOMEM;
 	}
 
@@ -920,13 +920,13 @@ static int netapp_ontapdevices(int argc, char **argv, struct command *command,
 
 	num = scandir(dev_path, &devices, netapp_nvme_filter, alphasort);
 	if (num <= 0) {
-		fprintf(stderr, "No NVMe devices detected.\n");
+		fprintf(stderr, "No NVMe devices detected\n");
 		return num;
 	}
 
 	ontapdevices = calloc(num, sizeof(*ontapdevices));
 	if (!ontapdevices) {
-		fprintf(stderr, "Unable to allocate memory for devices.\n");
+		fprintf(stderr, "Unable to allocate memory for devices\n");
 		return -ENOMEM;
 	}
 
