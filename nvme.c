@@ -862,6 +862,7 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 	size_t total_size;
 	__u8 *data_ptr = NULL;
 	int data_written = 0, data_remaining = 0;
+	nvme_print_flags_t flags;
 
 	struct config {
 		char	*file_name;
@@ -888,6 +889,12 @@ static int get_telemetry_log(int argc, char **argv, struct command *cmd,
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.file_name) {
 		nvme_show_error("Please provide an output file!");
@@ -2253,6 +2260,7 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	_cleanup_free_ unsigned char *log = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -2304,6 +2312,12 @@ static int get_log(int argc, char **argv, struct command *cmd, struct plugin *pl
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.aen) {
 		cfg.log_len = 4096;
@@ -2768,6 +2782,7 @@ static int delete_ns(int argc, char **argv, struct command *cmd, struct plugin *
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -2785,6 +2800,12 @@ static int delete_ns(int argc, char **argv, struct command *cmd, struct plugin *
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.namespace_id) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
@@ -2811,6 +2832,7 @@ static int nvme_attach_ns(int argc, char **argv, int attach, const char *desc, s
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err, num;
 	__u16 list[NVME_ID_CTRL_LIST_MAX];
+	nvme_print_flags_t flags;
 
 	const char *namespace_id = "namespace to attach";
 	const char *cont = "optional comma-sep controller id list";
@@ -2832,6 +2854,12 @@ static int nvme_attach_ns(int argc, char **argv, int attach, const char *desc, s
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.namespace_id) {
 		nvme_show_error("%s: namespace-id parameter required", cmd->name);
@@ -3029,6 +3057,7 @@ static int create_ns(int argc, char **argv, struct command *cmd, struct plugin *
 	_cleanup_free_ struct nvme_id_ns_granularity_list *gr_list = NULL;
 	__u32 align_nsze = 1 << 20; /* Default 1 MiB */
 	__u32 align_ncap = align_nsze;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u64	nsze;
@@ -3100,6 +3129,12 @@ static int create_ns(int argc, char **argv, struct command *cmd, struct plugin *
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.flbas != 0xff && cfg.bs != 0x00) {
 		nvme_show_error(
@@ -4001,6 +4036,7 @@ static int id_iocs(int argc, char **argv, struct command *cmd, struct plugin *pl
 	_cleanup_free_ struct nvme_id_iocs *iocs = NULL;
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u16	cntid;
@@ -4016,6 +4052,12 @@ static int id_iocs(int argc, char **argv, struct command *cmd, struct plugin *pl
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	iocs = nvme_alloc(sizeof(*iocs));
 	if (!iocs)
@@ -4092,12 +4134,19 @@ static int get_ns_id(int argc, char **argv, struct command *cmd, struct plugin *
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	unsigned int nsid;
 	int err;
+	nvme_print_flags_t flags;
 
 	NVME_ARGS(opts);
 
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	err = nvme_get_nsid(dev_fd(dev), &nsid);
 	if (err < 0) {
@@ -4408,6 +4457,7 @@ static int device_self_test(int argc, char **argv, struct command *cmd, struct p
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -4429,6 +4479,12 @@ static int device_self_test(int argc, char **argv, struct command *cmd, struct p
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.stc == NVME_ST_CODE_RESERVED) {
 		_cleanup_free_ struct nvme_self_test_log *log = NULL;
@@ -4724,6 +4780,12 @@ static int get_feature(int argc, char **argv, struct command *cmd,
 	if (err)
 		return err;
 
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
+
 	if (!argconfig_parse_seen(opts, "namespace-id")) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
 		if (err < 0) {
@@ -4878,6 +4940,7 @@ static int fw_download(int argc, char **argv, struct command *cmd, struct plugin
 	struct stat sb;
 	void *fw_buf;
 	struct nvme_id_ctrl ctrl = { 0 };
+	nvme_print_flags_t flags;
 
 	struct config {
 		char	*fw;
@@ -4905,6 +4968,12 @@ static int fw_download(int argc, char **argv, struct command *cmd, struct plugin
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	fw_fd = open(cfg.fw, O_RDONLY);
 	cfg.offset <<= 2;
@@ -5035,6 +5104,7 @@ static int fw_commit(int argc, char **argv, struct command *cmd, struct plugin *
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	__u32 result;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u8	slot;
@@ -5056,6 +5126,12 @@ static int fw_commit(int argc, char **argv, struct command *cmd, struct plugin *
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.slot > 7) {
 		nvme_show_error("invalid slot:%d", cfg.slot);
@@ -5167,12 +5243,19 @@ static int ns_rescan(int argc, char **argv, struct command *cmd, struct plugin *
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	NVME_ARGS(opts);
 
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	err = nvme_ns_rescan(dev_fd(dev));
 	if (err < 0)
@@ -5195,6 +5278,7 @@ static int sanitize_cmd(int argc, char **argv, struct command *cmd, struct plugi
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		bool	no_dealloc;
@@ -5237,6 +5321,12 @@ static int sanitize_cmd(int argc, char **argv, struct command *cmd, struct plugi
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	switch (cfg.sanact) {
 	case NVME_SANITIZE_SANACT_EXIT_FAILURE:
@@ -6047,6 +6137,12 @@ static int get_property(int argc, char **argv, struct command *cmd, struct plugi
 	if (err)
 		return err;
 
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
+
 	if (cfg.offset == -1) {
 		nvme_show_error("offset required param");
 		return -EINVAL;
@@ -6071,6 +6167,7 @@ static int set_property(int argc, char **argv, struct command *cmd, struct plugi
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct set_reg_config cfg = {
 		.offset	= -1,
@@ -6084,6 +6181,12 @@ static int set_property(int argc, char **argv, struct command *cmd, struct plugi
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.offset == -1) {
 		nvme_show_error("offset required param");
@@ -6373,6 +6476,7 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 	_cleanup_fd_ int ffd = STDIN_FILENO;
 	int err;
 	__u32 result;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -6408,6 +6512,12 @@ static int set_feature(int argc, char **argv, struct command *cmd, struct plugin
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!argconfig_parse_seen(opts, "namespace-id")) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
@@ -6524,6 +6634,7 @@ static int sec_send(int argc, char **argv, struct command *cmd, struct plugin *p
 	_cleanup_fd_ int sec_fd = -1;
 	unsigned int sec_size;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -6554,6 +6665,12 @@ static int sec_send(int argc, char **argv, struct command *cmd, struct plugin *p
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.tl == 0) {
 		nvme_show_error("--tl unspecified or zero");
@@ -7050,6 +7167,7 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 	__u32 nlbs[256] = {0,};
 	__u64 slbas[256] = {0,};
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -7086,6 +7204,12 @@ static int dsm(int argc, char **argv, struct command *cmd, struct plugin *plugin
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	nc = argconfig_parse_comma_sep_array_u32(cfg.ctx_attrs, ctx_attrs, ARRAY_SIZE(ctx_attrs));
 	nb = argconfig_parse_comma_sep_array_u32(cfg.blocks, nlbs, ARRAY_SIZE(nlbs));
@@ -7393,6 +7517,7 @@ static int resv_acquire(int argc, char **argv, struct command *cmd, struct plugi
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -7423,6 +7548,12 @@ static int resv_acquire(int argc, char **argv, struct command *cmd, struct plugi
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.namespace_id) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
@@ -7470,6 +7601,7 @@ static int resv_register(int argc, char **argv, struct command *cmd, struct plug
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -7499,6 +7631,12 @@ static int resv_register(int argc, char **argv, struct command *cmd, struct plug
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.namespace_id) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
@@ -7554,6 +7692,7 @@ static int resv_release(int argc, char **argv, struct command *cmd, struct plugi
 
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -7581,6 +7720,12 @@ static int resv_release(int argc, char **argv, struct command *cmd, struct plugi
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (!cfg.namespace_id) {
 		err = nvme_get_nsid(dev_fd(dev), &cfg.namespace_id);
@@ -8233,6 +8378,7 @@ static int sec_recv(int argc, char **argv, struct command *cmd, struct plugin *p
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	_cleanup_free_ void *sec_buf = NULL;
 	int err;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u32	namespace_id;
@@ -8266,6 +8412,12 @@ static int sec_recv(int argc, char **argv, struct command *cmd, struct plugin *p
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.size) {
 		sec_buf = nvme_alloc(cfg.size);
@@ -8404,6 +8556,7 @@ static int capacity_mgmt(int argc, char **argv, struct command *cmd, struct plug
 	_cleanup_nvme_dev_ struct nvme_dev *dev = NULL;
 	int err = -1;
 	__u32 result;
+	nvme_print_flags_t flags;
 
 	struct config {
 		__u8	operation;
@@ -8428,6 +8581,12 @@ static int capacity_mgmt(int argc, char **argv, struct command *cmd, struct plug
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.operation > 0xf) {
 		nvme_show_error("invalid operation field: %u", cfg.operation);
@@ -8736,6 +8895,7 @@ static int passthru(int argc, char **argv, bool admin,
 	__u32 result;
 	const char *cmd_name = NULL;
 	struct timeval start_time, end_time;
+	nvme_print_flags_t flags_t;
 
 	struct passthru_config cfg = {
 		.opcode		= 0,
@@ -8791,6 +8951,12 @@ static int passthru(int argc, char **argv, bool admin,
 	err = parse_and_open(&dev, argc, argv, desc, opts);
 	if (err)
 		return err;
+
+	err = validate_output_format(nvme_cfg.output_format, &flags_t);
+	if (err < 0) {
+		nvme_show_error("Invalid output format");
+		return err;
+	}
 
 	if (cfg.opcode & 0x01) {
 		cfg.write = true;
