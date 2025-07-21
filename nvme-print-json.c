@@ -4295,9 +4295,6 @@ static void json_detail_list(nvme_root_t t)
 
 	nvme_host_t h;
 	nvme_subsystem_t s;
-	nvme_ctrl_t c;
-	nvme_path_t p;
-	nvme_ns_t n;
 
 	nvme_for_each_host(t, h) {
 		struct json_object *hss = json_create_object();
@@ -4311,76 +4308,14 @@ static void json_detail_list(nvme_root_t t)
 
 		nvme_for_each_subsystem(h, s) {
 			struct json_object *jss = json_create_object();
-			struct json_object *jctrls = json_create_array();
-			struct json_object *jnss = json_create_array();
 
 			obj_add_str(jss, "Subsystem", nvme_subsystem_get_name(s));
 			obj_add_str(jss, "SubsystemNQN", nvme_subsystem_get_nqn(s));
 
-			nvme_subsystem_for_each_ctrl(s, c) {
-				struct json_object *jctrl = json_create_object();
-				struct json_object *jnss = json_create_array();
-				struct json_object *jpaths = json_create_array();
-
-				obj_add_str(jctrl, "Controller", nvme_ctrl_get_name(c));
-				obj_add_str(jctrl, "Cntlid", nvme_ctrl_get_cntlid(c));
-				obj_add_str(jctrl, "SerialNumber", nvme_ctrl_get_serial(c));
-				obj_add_str(jctrl, "ModelNumber", nvme_ctrl_get_model(c));
-				obj_add_str(jctrl, "Firmware", nvme_ctrl_get_firmware(c));
-				obj_add_str(jctrl, "Transport", nvme_ctrl_get_transport(c));
-				obj_add_str(jctrl, "Address", nvme_ctrl_get_address(c));
-				obj_add_str(jctrl, "Slot", nvme_ctrl_get_phy_slot(c));
-
-				nvme_ctrl_for_each_ns(c, n) {
-					struct json_object *jns = json_create_object();
-					int lba = nvme_ns_get_lba_size(n);
-					uint64_t nsze = nvme_ns_get_lba_count(n) * lba;
-					uint64_t nuse = nvme_ns_get_lba_util(n) * lba;
-
-					obj_add_str(jns, "NameSpace", nvme_ns_get_name(n));
-					obj_add_str(jns, "Generic", nvme_ns_get_generic_name(n));
-					obj_add_int(jns, "NSID", nvme_ns_get_nsid(n));
-					obj_add_uint64(jns, "UsedBytes", nuse);
-					obj_add_uint64(jns, "MaximumLBA", nvme_ns_get_lba_count(n));
-					obj_add_uint64(jns, "PhysicalSize", nsze);
-					obj_add_int(jns, "SectorSize", lba);
-
-					array_add_obj(jnss, jns);
-				}
-				obj_add_obj(jctrl, "Namespaces", jnss);
-
-				nvme_ctrl_for_each_path(c, p) {
-					struct json_object *jpath = json_create_object();
-
-					obj_add_str(jpath, "Path", nvme_path_get_name(p));
-					obj_add_str(jpath, "ANAState", nvme_path_get_ana_state(p));
-
-					array_add_obj(jpaths, jpath);
-				}
-				obj_add_obj(jctrl, "Paths", jpaths);
-
-				array_add_obj(jctrls, jctrl);
-			}
-			obj_add_obj(jss, "Controllers", jctrls);
-
-			nvme_subsystem_for_each_ns(s, n) {
-				struct json_object *jns = json_create_object();
-
-				int lba = nvme_ns_get_lba_size(n);
-				uint64_t nsze = nvme_ns_get_lba_count(n) * lba;
-				uint64_t nuse = nvme_ns_get_lba_util(n) * lba;
-
-				obj_add_str(jns, "NameSpace", nvme_ns_get_name(n));
-				obj_add_str(jns, "Generic", nvme_ns_get_generic_name(n));
-				obj_add_int(jns, "NSID", nvme_ns_get_nsid(n));
-				obj_add_uint64(jns, "UsedBytes", nuse);
-				obj_add_uint64(jns, "MaximumLBA", nvme_ns_get_lba_count(n));
-				obj_add_uint64(jns, "PhysicalSize", nsze);
-				obj_add_int(jns, "SectorSize", lba);
-
-				array_add_obj(jnss, jns);
-			}
-			obj_add_obj(jss, "Namespaces", jnss);
+			if (nvme_is_multipath(s))
+				json_print_detail_list_multipath(s, jss);
+			else
+				json_print_detail_list(s, jss);
 
 			array_add_obj(jsslist, jss);
 		}
