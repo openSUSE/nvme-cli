@@ -16,27 +16,26 @@ SYNOPSIS
 			[--identity=<id-vers> | -I <id-vers>]
 			[--secret=<secret> | -s <secret>]
 			[--insert | -i]
+			[--rfc8446 ]
 			[--keyfile=<keyfile> | -f <keyfile>]
 			[--output-format=<fmt> | -o <fmt>] [--verbose | -v]
 
 DESCRIPTION
 -----------
-Generate a base64-encoded NVMe TLS pre-shared key (PSK).
-The resulting key is either printed in the PSK interchange format
-'NVMeTLSkey-1:01:<base64 encoded data>:' or inserted as a
-'retained' key into the specified keyring if the '--insert' option
-is given.
-When the PSK should be inserted into the keyring a 'retained' key
-is derived from the secret key material. The resulting 'retained'
-key is stored with the identity
-'NVMe0R0<hmac> <host NQN> <subsystem NQN>'
-(for identity version '0') or
-'NVMe1R0<hmac> <host NQN> <subsystem NQN> <PSK hash>'
-(for identity version '1') in the keyring.
-The 'retained' key is derived from the secret key material,
-the specified subsystem NQN, and the host NQN.
-Once the 'retained' key is stored in the keyring the original
-secret key material cannot be retrieved.
+
+Generate a base64-encoded NVMe TLS pre-shared key (PSK). The resulting
+key is either printed in the PSK interchange format
+'NVMeTLSkey-1:01:<base64 encoded data>:' or inserted as a 'retained' key
+into the specified keyring if the '--insert' option is given. When the
+PSK should be inserted into the keyring a 'retained' key is derived from
+the secret key material using the HKDF-Expand-Label algorithm (note RFC
+8446 compliance needs to be enabled via --rf8446). The resulting
+'retained' key is stored with the identity 'NVMe0R0<hmac> <host NQN>
+<subsystem NQN>' (for identity version '0') or 'NVMe1R0<hmac> <host NQN>
+<subsystem NQN> <PSK hash>' (for identity version '1') in the keyring.
+The 'retained' key is derived from the secret key material, the specified
+subsystem NQN, and the host NQN. Once the 'retained' key is stored in the
+keyring the original secret key material cannot be retrieved.
 
 OPTIONS
 -------
@@ -81,6 +80,11 @@ OPTIONS
 --insert::
 	Insert the resulting TLS key into the keyring without printing out
 	the key in PSK interchange format.
+
+--rfc8446:
+	Use the RFC 8446 algorithm when deriving TLS keys, as specified
+	in the standard. The default algorithm is used for compatibility
+	with older implementations in the absence of --rfc8446.
 
 -f <keyfile>
 --keyfile=<keyfile>

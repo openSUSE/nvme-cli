@@ -16,6 +16,7 @@ SYNOPSIS
 			[--output-format=<fmt> | -o <fmt>]
 			[--identity=<id-vers> | -I <id-vers>]
 			[--insert | -i ]
+			[--rfc8446 ]
 			[--keyfile=<keyfile> | -f <keyfile>]
 			[--verbose | -v]
 
@@ -61,6 +62,11 @@ OPTIONS
 -i:
 --insert:
 	Insert the derived 'retained' key in the keyring.
+
+--rfc8446:
+	Use the RFC 8446 algorithm when deriving TLS keys, as specified
+	in the standard. The default algorithm is used for compatibility
+	with older implementations in the absence of --rfc8446.
 
 -f <keyfile>
 --keyfile=<keyfile>
