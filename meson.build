@@ -27,6 +27,7 @@ sysconfdir = join_paths(prefixdir, get_option('sysconfdir'))
 udevrulesdir   = join_paths(prefixdir, get_option('udevrulesdir'))
 dracutrulesdir = join_paths(prefixdir, get_option('dracutrulesdir'))
 systemddir     = join_paths(prefixdir, get_option('systemddir'))
+nmdispatchdir  = join_paths(prefixdir, get_option('nmdispatchdir'))
 rundir         = join_paths(prefixdir, get_option('rundir'))
 
 ###############################################################################
@@ -277,6 +278,21 @@ foreach file : udev_files
     input: 'nvmf-autoconnect/udev-rules/' + file + '.in',
     output: file,
     configuration: substs,
+  )
+endforeach
+
+nm_dispatcher_files = [
+  '80-nvmf-connect-nbft.sh'
+]
+
+foreach file : nm_dispatcher_files
+  configure_file(
+    input: 'nvmf-autoconnect/nm-dispatcher/' + file + '.in',
+    output: file,
+    configuration: substs,
+    install: true,
+    install_mode: 'rwxr-xr-x',
+    install_dir: nmdispatchdir
   )
 endforeach
 
